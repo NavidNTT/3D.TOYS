@@ -1,0 +1,38 @@
+<?php
+
+use App\Http\Controllers\Api\V1\AuthController;
+use App\Http\Controllers\Api\V1\OrderController;
+use Illuminate\Support\Facades\Route;
+
+/*
+|--------------------------------------------------------------------------
+| API routes (prefixed with /api by the framework)
+|--------------------------------------------------------------------------
+*/
+
+Route::prefix('v1/auth')->name('api.v1.auth.')->group(function (): void {
+    // Public: request a one-time password. Throttled to 1 request / 2 minutes
+    // and 5 requests / hour per phone + IP (see bootstrap/app.php).
+    Route::post('otp/send', [AuthController::class, 'sendOtp'])
+        ->middleware('throttle:otp-send')
+        ->name('otp.send');
+
+    // Public: exchange a valid OTP for a Sanctum token. Extra throttle on top
+    // of the send limiter to make brute-forcing a 5-digit code impractical.
+    Route::post('otp/verify', [AuthController::class, 'verifyOtp'])
+        ->middleware('throttle:otp-verify')
+        ->name('otp.verify');
+
+    // Authenticated with `Authorization: Bearer <token>`.
+    Route::middleware('auth:sanctum')->group(function (): void {
+        Route::get('me', [AuthController::class, 'me'])->name('me');
+        Route::post('logout', [AuthController::class, 'logout'])->name('logout');
+    });
+});
+
+Route::middleware('auth:sanctum')->prefix('v1/orders')->name('api.v1.orders.')->group(function (): void {
+    // Checkout requires an account: the order must belong to someone, so the
+    // customer can track it and the shop can fulfil it. Guests are stopped by
+    // the middleware before any validation runs.
+    Route::post('checkout', [OrderController::class, 'checkout'])->name('checkout');
+});

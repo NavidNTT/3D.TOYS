@@ -1,0 +1,6 @@
+# The Laravel application is scaffolded by docker/php/bootstrap-laravel.sh:
+#
+#   docker compose --env-file .env.docker exec laravel.app bootstrap-laravel.sh
+#
+# This directory is bind-mounted to /var/www/html inside laravel.app and
+# laravel.worker, so everything the container writes shows up here.

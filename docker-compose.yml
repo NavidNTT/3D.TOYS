@@ -1,0 +1,429 @@
+###############################################################################
+#  Toy Store — local development stack
+#
+#      cp .env.example .env.docker
+#      docker compose --env-file .env.docker up -d --build
+#
+#  Every value below has a working default, so the stack also boots with a
+#  bare `docker compose up`; .env.docker exists so you can change ports,
+#  passwords and versions without touching this file.
+#
+#  Topology (all on the `toy-store` bridge network, container-to-container
+#  traffic never leaves the host):
+#
+#      browser ─┬─ :8080 ─ nginx ──fastcgi──> laravel.app (php-fpm)
+#               │                    └─ laravel.worker (queue:work redis)
+#               ├─ :3000 ─ nextjs.app ──> http://nginx (internal)
+#               ├─ :9001 ─ minio console      :9000 ─ S3 API
+#               ├─ :3307 ─ mysql 8.0
+#               └─ :6380 ─ redis 7
+###############################################################################
+
+name: ${COMPOSE_PROJECT_NAME:-toy-store}
+
+# --------------------------------------------------------------------------
+#  Shared building blocks
+# --------------------------------------------------------------------------
+
+# Log rotation: json-file is unbounded by default and 3D asset debugging
+# gets chatty fast.
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+# Everything Laravel needs to talk to the rest of the stack. These land in
+# the container environment, which Laravel prefers over its .env file.
+x-laravel-environment: &laravel-environment
+  APP_NAME: ${APP_NAME:-Toy Store}
+  APP_ENV: ${APP_ENV:-local}
+  APP_DEBUG: ${APP_DEBUG:-true}
+  APP_URL: ${APP_URL:-http://localhost:8080}
+  APP_TIMEZONE: ${APP_TIMEZONE:-UTC}
+  LOG_CHANNEL: stderr
+  LOG_LEVEL: ${LOG_LEVEL:-debug}
+
+  DB_CONNECTION: mysql
+  DB_HOST: mysql
+  DB_PORT: "3306"
+  DB_DATABASE: ${MYSQL_DATABASE:-toy_store_db}
+  DB_USERNAME: ${MYSQL_USER:-toy_store}
+  DB_PASSWORD: ${MYSQL_PASSWORD:-toy_store_secret}
+
+  CACHE_STORE: redis
+  SESSION_DRIVER: redis
+  QUEUE_CONNECTION: ${QUEUE_CONNECTION:-redis}
+  REDIS_CLIENT: phpredis
+  REDIS_HOST: redis
+  REDIS_PORT: "6379"
+  REDIS_PASSWORD: ${REDIS_PASSWORD:-redis_secret}
+  REDIS_PREFIX: "toy_store_"
+
+  # MinIO speaks S3; PATH_STYLE is mandatory for a single endpoint.
+  # AWS_ENDPOINT is the internal address, AWS_URL is what gets handed
+  # to browsers (published port), so generated URLs stay clickable.
+  FILESYSTEM_DISK: s3
+  AWS_ACCESS_KEY_ID: ${MINIO_ROOT_USER:-toy_admin}
+  AWS_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:-toy_admin_secret}
+  AWS_DEFAULT_REGION: us-east-1
+  AWS_BUCKET: ${MINIO_BUCKET:-toy-store-assets}
+  AWS_ENDPOINT: ${MINIO_INTERNAL_URL:-http://minio:9000}
+  AWS_USE_PATH_STYLE_ENDPOINT: "true"
+  AWS_URL: ${MINIO_PUBLIC_URL:-http://localhost:9000}/${MINIO_BUCKET:-toy-store-assets}
+
+  # Laravel 12: 11.x is EOL and blocked by Composer's advisory policy.
+  LARAVEL_VERSION: ${LARAVEL_VERSION:-^12.0}
+  # Only used by the bootstrap banner; kept here so it reports real URLs.
+  MINIO_CONSOLE_PORT: ${MINIO_CONSOLE_PORT:-9001}
+
+  FRONTEND_URL: http://localhost:${FRONTEND_PORT:-3000}
+  SANCTUM_STATEFUL_DOMAINS: ${SANCTUM_STATEFUL_DOMAINS:-localhost:3000,localhost:8080}
+
+  RUN_SETUP: ${RUN_SETUP:-true}
+
+services:
+
+  # ────────────────────────────────────────────────────────────────────────
+  #  laravel.app — PHP 8.3 FPM (the API)
+  # ────────────────────────────────────────────────────────────────────────
+  laravel.app:
+    image: toy-store/php:8.3
+    build:
+      context: ./docker/php
+      dockerfile: Dockerfile
+      args:
+        PHP_BASE_IMAGE: php:${PHP_IMAGE_TAG:-8.3-fpm-alpine}
+        APP_UID: ${APP_UID:-1000}
+        APP_GID: ${APP_GID:-1000}
+    restart: unless-stopped
+    working_dir: /var/www/html
+    # php-fpm is the image's default CMD; declared here for clarity.
+    command: ["php-fpm", "--nodaemonize"]
+    environment:
+      <<: *laravel-environment
+    volumes:
+      - ./backend:/var/www/html
+      # Live-edit PHP settings without rebuilding the image. The same file is
+      # COPYed into the image (see Dockerfile) so workers behave identically.
+      - ./docker/php/php.ini:/usr/local/etc/php/conf.d/zz-toy-store.ini:ro
+    ports:
+      # Optional: exposes FPM directly for Xdebug/IDE clients. nginx is the
+      # supported entry point. 9090 on purpose — 9000 is MinIO's API port.
+      - "127.0.0.1:${PHP_FPM_PORT:-9090}:9000"
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_started
+    healthcheck:
+      # FastCGI ping through the pool (ping.path=/ping), i.e. "FPM answered".
+      test: ["CMD", "/usr/local/bin/fpm-healthcheck.sh"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    logging: *default-logging
+    networks:
+      - toy-store
+
+  # ────────────────────────────────────────────────────────────────────────
+  #  laravel.worker — background queue consumer (same image, different CMD)
+  # ────────────────────────────────────────────────────────────────────────
+  laravel.worker:
+    image: toy-store/php:8.3
+    restart: unless-stopped
+    working_dir: /var/www/html
+    # --max-time recycles the process hourly (PHP memory creep);
+    # restart: unless-stopped brings it straight back.
+    command:
+      - php
+      - artisan
+      - queue:work
+      - redis
+      - --sleep=3
+      - --tries=${QUEUE_WORKER_TRIES:-3}
+      - --timeout=${QUEUE_WORKER_TIMEOUT:-120}
+      - --max-time=3600
+    environment:
+      <<: *laravel-environment
+      # Idle until backend/composer.json exists instead of crash-looping on a
+      # fresh clone; see the entrypoint's WAIT_FOR_APP block.
+      WAIT_FOR_APP: "true"
+    volumes:
+      - ./backend:/var/www/html
+    depends_on:
+      # Wait for a healthy app first: its entrypoint finishes composer
+      # install / APP_KEY generation before workers start pulling jobs.
+      laravel.app:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      mysql:
+        condition: service_healthy
+    stop_signal: SIGTERM
+    stop_grace_period: 30s
+    healthcheck:
+      # No HTTP surface here. Before the app is scaffolded there is nothing for
+      # a worker to do, so it counts as healthy; afterwards the artisan queue
+      # process must be alive (pgrep comes from busybox).
+      test:
+        - CMD-SHELL
+        - test ! -f /var/www/html/composer.json || pgrep -f 'artisan queue:work' >/dev/null
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
+    logging: *default-logging
+    networks:
+      - toy-store
+
+  # ────────────────────────────────────────────────────────────────────────
+  #  nginx — reverse proxy / static file server for the Laravel API
+  # ────────────────────────────────────────────────────────────────────────
+  nginx:
+    image: nginx:${NGINX_IMAGE_TAG:-1.27-alpine}
+    restart: unless-stopped
+    ports:
+      # 8090, not the usual 8080: hobby machines tend to have something else
+      # already sitting on 8080. Change it in .env.docker any time.
+      - "${NGINX_PORT:-8090}:80"
+    volumes:
+      # Read-only: nginx only needs static files from Laravel's public dir.
+      - ./backend:/var/www/html:ro
+      - ./docker/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      laravel.app:
+        condition: service_healthy
+    environment:
+      TZ: UTC
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    logging: *default-logging
+    networks:
+      - toy-store
+
+  # ────────────────────────────────────────────────────────────────────────
+  #  mysql — primary datastore
+  # ────────────────────────────────────────────────────────────────────────
+  mysql:
+    image: mysql:${MYSQL_IMAGE_TAG:-8.0}
+    restart: unless-stopped
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      # 3D-heavy catalogs deserve a sane default for large metadata blobs.
+      - --max_allowed_packet=64M
+      - --innodb-buffer-pool-size=512M
+      - --slow-query-log=1
+      - --long-query-time=1
+    environment:
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-toy_store_db}
+      MYSQL_USER: ${MYSQL_USER:-toy_store}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-toy_store_secret}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root_secret}
+      TZ: UTC
+    ports:
+      # 3307 by default: plenty of machines already run MySQL on 3306.
+      - "${MYSQL_PORT:-3307}:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      # Real login as the app user against the app database — proves the
+      # container, the credentials and the created schema are all usable.
+      # $$ defers expansion to the container so secrets stay out of
+      # `docker compose config` output.
+      test:
+        - CMD-SHELL
+        - mysql -h 127.0.0.1 -u"$$MYSQL_USER" -p"$$MYSQL_PASSWORD" -e 'SELECT 1' "$$MYSQL_DATABASE" >/dev/null 2>&1
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 40s
+    stop_grace_period: 30s
+    logging: *default-logging
+    networks:
+      - toy-store
+
+  # ────────────────────────────────────────────────────────────────────────
+  #  redis — cache, sessions and queues
+  # ────────────────────────────────────────────────────────────────────────
+  redis:
+    image: redis:${REDIS_IMAGE_TAG:-7-alpine}
+    restart: unless-stopped
+    command:
+      - redis-server
+      - --appendonly
+      - "yes"
+      - --requirepass
+      - ${REDIS_PASSWORD:-redis_secret}
+    environment:
+      # REDISCLI_AUTH keeps the password out of the process list and stops
+      # redis-cli printing the "using password on the command line" warning.
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-redis_secret}
+      REDISCLI_AUTH: ${REDIS_PASSWORD:-redis_secret}
+      TZ: UTC
+    ports:
+      - "${REDIS_PORT:-6380}:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli ping | grep -q PONG"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+    logging: *default-logging
+    networks:
+      - toy-store
+
+  # ────────────────────────────────────────────────────────────────────────
+  #  minio — S3-compatible object storage for .glb / .gltf / textures
+  # ────────────────────────────────────────────────────────────────────────
+  minio:
+    image: ${MINIO_IMAGE:-quay.io/minio/minio}:${MINIO_IMAGE_TAG:-latest}
+    restart: unless-stopped
+    command: ["server", "/data", "--console-address", ":9001"]
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-toy_admin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-toy_admin_secret}
+      # Makes the console's "share" links point at the host, not the network.
+      MINIO_BROWSER_REDIRECT_URL: http://localhost:${MINIO_CONSOLE_PORT:-9001}
+      TZ: UTC
+    ports:
+      - "${MINIO_API_PORT:-9000}:9000"       # S3 API
+      - "${MINIO_CONSOLE_PORT:-9001}:9001"   # web console
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      # The server image ships no curl/wget (it is a ubi-micro build), so
+      # probe with the bundled `mc` — the method MinIO maintainers recommend.
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    logging: *default-logging
+    networks:
+      - toy-store
+
+  # ────────────────────────────────────────────────────────────────────────
+  #  minio-init — one-shot job: create + publish the asset bucket
+  # ────────────────────────────────────────────────────────────────────────
+  minio-init:
+    image: ${MINIO_MC_IMAGE:-quay.io/minio/mc}:${MINIO_MC_TAG:-latest}
+    # /usr/bin/mc is the image entrypoint; run our script instead.
+    entrypoint: ["/bin/sh", "/scripts/init-bucket.sh"]
+    restart: "no"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-toy_admin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-toy_admin_secret}
+      MINIO_BUCKET: ${MINIO_BUCKET:-toy-store-assets}
+      MINIO_BUCKET_POLICY: ${MINIO_BUCKET_POLICY:-download}
+      MINIO_ENDPOINT: ${MINIO_INTERNAL_URL:-http://minio:9000}
+      MINIO_PUBLIC_URL: ${MINIO_PUBLIC_URL:-http://localhost:9000}
+      MINIO_ALIAS: toystore
+    volumes:
+      - ./docker/minio:/scripts:ro
+    depends_on:
+      minio:
+        condition: service_healthy
+    logging: *default-logging
+    networks:
+      - toy-store
+
+  # ────────────────────────────────────────────────────────────────────────
+  #  nextjs.app — Next.js 14 App Router (dev server + hot reload)
+  # ────────────────────────────────────────────────────────────────────────
+  nextjs.app:
+    # Debian (glibc), NOT alpine: Next.js loads a native SWC/Turbopack binary
+    # and the musl build can trap with `Bus error (core dumped)` (SIGBUS) on
+    # Alpine, which kills the dev server right after "✓ Starting..." with a
+    # silent exit code 0. The glibc image starts reliably; see README.md →
+    # "Why the frontend container is Debian, not Alpine".
+    image: node:${NODE_IMAGE_TAG:-22-bookworm-slim}
+    restart: unless-stopped
+    working_dir: /app
+    # A TTY keeps the dev server's output streaming (progress + colours) and
+    # lets `docker compose exec nextjs.app` behave like a normal shell.
+    tty: true
+    stdin_open: true
+    # Bootstrap dependencies on first run, then hand over to `next dev`.
+    # Docker Desktop on Windows/macOS does not forward inotify events from
+    # bind mounts reliably, hence the polling flags (Webpack + Chokidar).
+    command:
+      - sh
+      - -c
+      - >
+        if [ ! -x node_modules/.bin/next ]; then
+          echo '→ installing frontend dependencies (first run only)…';
+          npm install --no-audit --no-fund;
+        fi;
+        exec npm run dev -- --hostname 0.0.0.0 --port 3000
+    environment:
+      NODE_ENV: development
+      NEXT_TELEMETRY_DISABLED: "1"
+      WATCHPACK_POLLING: "true"
+      CHOKIDAR_USEPOLLING: "true"
+      # Browser-side (host) URLs…
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8090/api}
+      NEXT_PUBLIC_MINIO_URL: ${NEXT_PUBLIC_MINIO_URL:-http://localhost:9000}
+      NEXT_PUBLIC_MINIO_CONSOLE_URL: ${NEXT_PUBLIC_MINIO_CONSOLE_URL:-http://localhost:9001}
+      # …and the internal address used by server components / route handlers,
+      # which run inside this container and must not loop back through the host.
+      LARAVEL_INTERNAL_URL: ${LARAVEL_INTERNAL_URL:-http://nginx}
+    volumes:
+      - ./frontend:/app
+      # Keep node_modules and the webpack cache off the (slow) bind mount.
+      - nextjs_node_modules:/app/node_modules
+      - nextjs_next_cache:/app/.next
+    ports:
+      - "${FRONTEND_PORT:-3000}:3000"
+    depends_on:
+      laravel.app:
+        condition: service_started
+    healthcheck:
+      # Debian slim ships neither curl nor wget, so probe with the Node
+      # runtime that is already in the image.
+      test:
+        - CMD-SHELL
+        - node -e "fetch('http://127.0.0.1:3000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      # Generous: the very first boot runs `npm install` (minutes on Windows).
+      start_period: 240s
+    logging: *default-logging
+    networks:
+      - toy-store
+
+# --------------------------------------------------------------------------
+#  Networks
+# --------------------------------------------------------------------------
+networks:
+  toy-store:
+    name: ${COMPOSE_PROJECT_NAME:-toy-store}_net
+    driver: bridge
+    # Not `internal: true`: the dev stack needs egress for composer/npm and
+    # for the browser to reach published ports.
+
+# --------------------------------------------------------------------------
+#  Volumes — named, so `docker compose down` never destroys data
+# --------------------------------------------------------------------------
+volumes:
+  mysql_data:
+    name: ${COMPOSE_PROJECT_NAME:-toy-store}_mysql_data
+  redis_data:
+    name: ${COMPOSE_PROJECT_NAME:-toy-store}_redis_data
+  minio_data:
+    name: ${COMPOSE_PROJECT_NAME:-toy-store}_minio_data
+  nextjs_node_modules:
+    name: ${COMPOSE_PROJECT_NAME:-toy-store}_nextjs_node_modules
+  nextjs_next_cache:
+    name: ${COMPOSE_PROJECT_NAME:-toy-store}_nextjs_next_cache

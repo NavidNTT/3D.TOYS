@@ -1,0 +1,35 @@
+# ── Secrets / local env ───────────────────────────────────────
+.env.docker
+.env*.local
+*.pem
+
+# ── Laravel (backend) ─────────────────────────────────────────
+backend/vendor/
+backend/.env
+backend/.env.backup
+backend/.phpunit.result.cache
+backend/storage/*.key
+backend/storage/framework/cache/data/*
+backend/storage/framework/sessions/*
+backend/storage/framework/views/*
+backend/storage/logs/*
+backend/public/storage
+backend/public/hot
+backend/node_modules/
+backend/bootstrap/cache/*.php
+
+# ── Next.js (frontend) ────────────────────────────────────────
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+frontend/build/
+frontend/.turbo/
+
+# ── Tooling / OS ──────────────────────────────────────────────
+.docker-setup.lock
+*.log
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json
