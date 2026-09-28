@@ -1,9 +1,7 @@
 <?php
 
-use App\Providers\AppServiceProvider;
-use App\Providers\SmsServiceProvider;
-
 return [
-    AppServiceProvider::class,
-    SmsServiceProvider::class,
+    App\Providers\AppServiceProvider::class,
+    App\Providers\Filament\AdminPanelProvider::class,
+    App\Providers\SmsServiceProvider::class,
 ];

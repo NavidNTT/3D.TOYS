@@ -19,6 +19,7 @@ class Category extends Model
     protected $fillable = [
         'name',
         'slug',
+        'description',
         'theme_config',
     ];
 
@@ -42,3 +43,4 @@ class Category extends Model
         return $this->hasMany(Product::class);
     }
 }
+

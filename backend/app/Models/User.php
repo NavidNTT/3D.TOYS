@@ -4,12 +4,13 @@ namespace App\Models;
 
 use App\Enums\UserRole;
 use Database\Factories\UserFactory;
+use Filament\Models\Contracts\FilamentUser;
+use Filament\Panel;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
-
-use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /**
  * Application user.
@@ -17,7 +18,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * Authentication is passwordless: the phone number is the identity and access
  * is granted through Sanctum personal access tokens after an OTP challenge.
  */
-class User extends Authenticatable
+class User extends Authenticatable implements FilamentUser
 {
     /** @use HasFactory<UserFactory> */
     use HasApiTokens, HasFactory, Notifiable;
@@ -55,6 +56,16 @@ class User extends Authenticatable
     }
 
     /**
+     * Determine if the user can access the Filament panel.
+     */
+    public function canAccessPanel(Panel $panel): bool
+    {
+        return $this->role === 'admin'
+            || $this->role === UserRole::Admin
+            || $this->role?->value === 'admin';
+    }
+
+    /**
      * Convenience check used by future admin-only policies.
      */
     public function isAdmin(): bool
@@ -72,3 +83,4 @@ class User extends Authenticatable
         return $this->hasMany(Order::class);
     }
 }
+
