@@ -2,6 +2,8 @@
 
 namespace App\Providers;
 
+use App\Models\ProductMedia3D;
+use App\Observers\ProductMedia3DObserver;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\RateLimiter;
@@ -23,6 +25,13 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         $this->configureRateLimiting();
+
+        // Draco pipeline: auto-dispatch optimization when a 3D file is set.
+        // The observer covers the canonical ProductMedia3D model; the legacy
+        // Media3d model self-registers its own dispatch hooks in booted()
+        // (it is the model Filament's `relationship('media3d')` saves through).
+        // Separate Eloquent classes => separate events => no double dispatch.
+        ProductMedia3D::observe(ProductMedia3DObserver::class);
     }
 
     /**

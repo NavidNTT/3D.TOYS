@@ -86,6 +86,19 @@ RUN set -eux; \
     rm -rf /tmp/pear /tmp/* /var/cache/apk/*
 
 # ---------------------------------------------------------------------------
+# Node.js (npm) + glTF-Transform CLI (Draco 3D optimizer)
+# ---------------------------------------------------------------------------
+# The Draco pipeline (`Optimize3DModelJob`) shells out to:
+#   gltf-transform optimize {input} {output} --compress draco
+# Install the CLI globally here — not via composer — so queue workers
+# (laravel.worker runs `queue:work` from this same image) can execute it.
+# Configure the binary path via GLTF_TRANSFORM_PATH in .env (default above).
+RUN set -eux; \
+    npm install -g @gltf-transform/cli; \
+    gltf-transform --version; \
+    npm cache clean --force
+
+# ---------------------------------------------------------------------------
 # Align the runtime user with the host user.
 #
 # Alpine's www-data is 82:82; on Linux/macOS hosts developers are 1000:1000,

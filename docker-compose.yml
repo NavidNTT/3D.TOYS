@@ -60,6 +60,13 @@ x-laravel-environment: &laravel-environment
   REDIS_PASSWORD: ${REDIS_PASSWORD:-redis_secret}
   REDIS_PREFIX: "toy_store_"
 
+  # Draco 3D optimization: path to the @gltf-transform/cli binary inside the
+  # php image (installed globally in docker/php/Dockerfile).
+  # Use "npx @gltf-transform/cli" if you prefer a local npm install instead.
+  GLTF_TRANSFORM_PATH: ${GLTF_TRANSFORM_PATH:-gltf-transform}
+  MODEL_3D_OPTIMIZED_DIR: ${MODEL_3D_OPTIMIZED_DIR:-models/3d/optimized}
+  MODEL_3D_OPTIMIZE_TIMEOUT: ${MODEL_3D_OPTIMIZE_TIMEOUT:-120}
+
   # MinIO speaks S3; PATH_STYLE is mandatory for a single endpoint.
   # AWS_ENDPOINT is the internal address, AWS_URL is what gets handed
   # to browsers (published port), so generated URLs stay clickable.

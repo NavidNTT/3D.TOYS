@@ -7,7 +7,9 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "sync:draco": "node scripts/sync-draco.mjs",
+    "verify:draco": "node scripts/verify-draco.mjs"
   },
   "dependencies": {
     "@react-three/drei": "^9.122.0",

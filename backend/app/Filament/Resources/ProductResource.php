@@ -105,6 +105,33 @@ class ProductResource extends Resource
                             ->maxSize(65536)
                             ->downloadable()
                             ->columnSpanFull(),
+                        Forms\Components\Placeholder::make('draco_status')
+                            ->label('وضعیت بهینه‌سازی (Draco)')
+                            ->content(function (?Product $record): string {
+                                $media = $record?->media3d;
+
+                                if (! $media || empty($media->original_file_url)) {
+                                    return '—';
+                                }
+
+                                if (empty($media->optimized_file_url)) {
+                                    return 'در حال بهینه‌سازی';
+                                }
+
+                                $savings = '';
+                                $original = $media->original_file_url
+                                    ? @filesize(public_path(ltrim($media->original_file_url, '/')))
+                                    : false;
+                                $optimized = (int) ($media->file_size ?? 0);
+
+                                if ($original && $optimized > 0 && $optimized < $original) {
+                                    $pct = round((($original - $optimized) / $original) * 100, 1);
+                                    $savings = ' — صرفه‌جویی: '.$pct.'٪';
+                                }
+
+                                return 'بهینه‌شده (Draco)'.$savings;
+                            })
+                            ->columnSpanFull(),
                         FileUpload::make('thumbnail_url')
                             ->label('3D Model Thumbnail')
                             ->image()
@@ -175,6 +202,15 @@ class ProductResource extends Resource
                     ->boolean()
                     ->trueIcon('heroicon-o-cube-transparent')
                     ->falseIcon('heroicon-o-x-mark'),
+                TextColumn::make('media3d.optimized_file_url')
+                    ->label('Draco')
+                    ->badge()
+                    ->getStateUsing(fn (?Product $record): string => (! $record?->media3d || empty($record->media3d->original_file_url))
+                        ? '—'
+                        : (empty($record->media3d->optimized_file_url) ? 'در حال بهینه‌سازی' : 'بهینه‌شده (Draco)'))
+                    ->color(fn (?Product $record): string => (! $record?->media3d || empty($record->media3d->original_file_url))
+                        ? 'gray'
+                        : (empty($record->media3d->optimized_file_url) ? 'warning' : 'success')),
                 TextColumn::make('created_at')
                     ->dateTime()
                     ->sortable()
