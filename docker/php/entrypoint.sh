@@ -30,6 +30,13 @@ prepare() {
         [ -d "$dir" ] && chmod 0755 "$dir" 2>/dev/null || true
     done
 
+    # Writable trees. FPM workers run as www-data while the CLI side (queue
+    # worker, artisan commands) runs as the container user, so both need group
+    # write: 0775 rather than 0755. Without this, a Laravel upgrade or a log
+    # rotation that leaves a root-owned file behind turns into a
+    # "failed to open stream: Permission denied" 500 on the next request.
+    chmod -R 0775 storage bootstrap/cache 2>/dev/null || true
+
     if [ ! -f composer.json ]; then
         log "no composer.json in ${APP_DIR} — Laravel is not installed yet."
         log "run:  docker compose --env-file .env.docker exec laravel.app bootstrap-laravel.sh"
@@ -58,6 +65,15 @@ prepare() {
     if [ -f artisan ] && ! grep -qE '^APP_KEY=base64:.+' .env 2>/dev/null; then
         log "generating APP_KEY"
         php artisan key:generate --force --no-interaction >/dev/null 2>&1 || true
+    fi
+
+    # public/storage -> storage/app/public. nginx serves 3D models through this
+    # symlink (the API returns URLs like APP_URL/storage/models/3d/x.glb), so a
+    # missing or dangling link means every viewer request 404s. `--force`
+    # repairs a link whose target moved; failures are non-fatal because a
+    # read-only mount must not stop the container from booting.
+    if [ -f artisan ]; then
+        php artisan storage:link --force --no-interaction >/dev/null 2>&1 || true
     fi
 
     # The FPM workers run as www-data; CLI runs (queue workers) as the

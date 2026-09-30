@@ -49,6 +49,7 @@ RUN set -eux; \
         npm \
         unzip \
         tzdata \
+        icu-libs \
         shadow \
         libpng \
         libjpeg-turbo \
@@ -59,6 +60,7 @@ RUN set -eux; \
     apk add --no-cache --virtual .build-deps \
         $PHPIZE_DEPS \
         freetype-dev \
+        icu-dev \
         libjpeg-turbo-dev \
         libpng-dev \
         libwebp-dev \
@@ -71,6 +73,7 @@ RUN set -eux; \
         bcmath \
         exif \
         gd \
+        intl \
         opcache \
         pcntl \
         pdo_mysql \

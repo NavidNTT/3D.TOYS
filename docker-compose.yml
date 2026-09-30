@@ -11,7 +11,7 @@
 #  Topology (all on the `toy-store` bridge network, container-to-container
 #  traffic never leaves the host):
 #
-#      browser ─┬─ :8080 ─ nginx ──fastcgi──> laravel.app (php-fpm)
+#      browser ─┬─ :8000 ─ nginx ──fastcgi──> laravel.app (php-fpm)
 #               │                    └─ laravel.worker (queue:work redis)
 #               ├─ :3000 ─ nextjs.app ──> http://nginx (internal)
 #               ├─ :9001 ─ minio console      :9000 ─ S3 API
@@ -39,7 +39,7 @@ x-laravel-environment: &laravel-environment
   APP_NAME: ${APP_NAME:-Toy Store}
   APP_ENV: ${APP_ENV:-local}
   APP_DEBUG: ${APP_DEBUG:-true}
-  APP_URL: ${APP_URL:-http://localhost:8080}
+  APP_URL: ${APP_URL:-http://localhost:8000}
   APP_TIMEZONE: ${APP_TIMEZONE:-UTC}
   LOG_CHANNEL: stderr
   LOG_LEVEL: ${LOG_LEVEL:-debug}
@@ -85,7 +85,11 @@ x-laravel-environment: &laravel-environment
   MINIO_CONSOLE_PORT: ${MINIO_CONSOLE_PORT:-9001}
 
   FRONTEND_URL: http://localhost:${FRONTEND_PORT:-3000}
-  SANCTUM_STATEFUL_DOMAINS: ${SANCTUM_STATEFUL_DOMAINS:-localhost:3000,localhost:8080}
+  SANCTUM_STATEFUL_DOMAINS: ${SANCTUM_STATEFUL_DOMAINS:-localhost:3000,localhost:8000}
+  # Browser origins allowed to call this API (consumed by config/cors.php).
+  # The storefront is a different origin from the API, so this is not
+  # optional: without it the SPA is blocked while curl still sees a 200.
+  CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:3000,http://127.0.0.1:3000,http://localhost:8000,http://127.0.0.1:8000}
 
   RUN_SETUP: ${RUN_SETUP:-true}
 
@@ -194,9 +198,11 @@ services:
     image: nginx:${NGINX_IMAGE_TAG:-1.27-alpine}
     restart: unless-stopped
     ports:
-      # 8090, not the usual 8080: hobby machines tend to have something else
-      # already sitting on 8080. Change it in .env.docker any time.
-      - "${NGINX_PORT:-8090}:80"
+      # 8000: the API entry point the docs and the frontend's
+      # NEXT_PUBLIC_API_URL point at. Override with NGINX_PORT in
+      # .env.docker if something else already owns it (this machine runs a
+      # second stack whose nginx sits on 8080).
+      - "${NGINX_PORT:-8000}:80"
     volumes:
       # Read-only: nginx only needs static files from Laravel's public dir.
       - ./backend:/var/www/html:ro
@@ -379,7 +385,7 @@ services:
       WATCHPACK_POLLING: "true"
       CHOKIDAR_USEPOLLING: "true"
       # Browser-side (host) URLs…
-      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8090/api}
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000/api}
       NEXT_PUBLIC_MINIO_URL: ${NEXT_PUBLIC_MINIO_URL:-http://localhost:9000}
       NEXT_PUBLIC_MINIO_CONSOLE_URL: ${NEXT_PUBLIC_MINIO_CONSOLE_URL:-http://localhost:9001}
       # …and the internal address used by server components / route handlers,

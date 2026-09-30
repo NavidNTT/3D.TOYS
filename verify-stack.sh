@@ -36,7 +36,7 @@ fi
 env_get() {
     grep -E "^$1=" "$ENV_FILE" 2>/dev/null | tail -1 | cut -d= -f2- | tr -d '"' | tr -d "'"
 }
-NGINX_PORT="$(env_get NGINX_PORT)"; NGINX_PORT="${NGINX_PORT:-8080}"
+NGINX_PORT="$(env_get NGINX_PORT)"; NGINX_PORT="${NGINX_PORT:-8000}"
 FRONTEND_PORT="$(env_get FRONTEND_PORT)"; FRONTEND_PORT="${FRONTEND_PORT:-3000}"
 MYSQL_PORT="$(env_get MYSQL_PORT)"; MYSQL_PORT="${MYSQL_PORT:-3307}"
 REDIS_PORT="$(env_get REDIS_PORT)"; REDIS_PORT="${REDIS_PORT:-6380}"
@@ -139,6 +139,25 @@ elif [ "$up" = "404" ]; then
 else
     bad "Laravel via nginx returned HTTP ${up} (502 = php-fpm unreachable)"
 fi
+
+# The storefront's catalog contract. A 404 here is what made the Next.js home
+# page answer 500 ("Failed to load the product catalog"), so it is a hard
+# failure: without it there is no storefront, only an error page.
+for endpoint in categories products; do
+    body="$(curl -s --max-time 6 -H 'Accept: application/json' \
+        "http://localhost:${NGINX_PORT}/api/v1/${endpoint}" 2>/dev/null)"
+    code="$(http_code "http://localhost:${NGINX_PORT}/api/v1/${endpoint}")"
+    case "$code" in
+        200)
+            case "$body" in
+                *'"success":true'*) ok "API         /api/v1/${endpoint} = 200 (JSON envelope)" ;;
+                *) bad "API         /api/v1/${endpoint} answered 200 but not the JSON envelope" ;;
+            esac
+            ;;
+        404) bad "API         /api/v1/${endpoint} = 404 — catalog routes are not registered" ;;
+        *)   bad "API         /api/v1/${endpoint} returned HTTP ${code}" ;;
+    esac
+done
 
 # ── 5. Next.js ────────────────────────────────────────────────────────────
 printf '\n5. Next.js\n'

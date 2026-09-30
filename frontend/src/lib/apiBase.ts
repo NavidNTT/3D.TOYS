@@ -4,11 +4,11 @@
  * Two different addresses are in play, and mixing them up is the classic
  * compose-networking bug:
  *
- *   browser → NEXT_PUBLIC_API_URL    the host, via a published port (e.g. :8090)
+ *   browser → NEXT_PUBLIC_API_URL    the host, via a published port (e.g. :8000)
  *   server  → LARAVEL_INTERNAL_URL   in-network, by service name (http://nginx)
  *
  * Server components run *inside* the nextjs.app container, where the host's
- * published port is unreachable, so `localhost:8090` there is a dead end.
+ * published port is unreachable, so `localhost:8000` there is a dead end.
  *
  * Every documented env value also stops short of the version prefix
  * (see .env.docker / .env.example: `.../api`, or a bare `http://nginx`), while

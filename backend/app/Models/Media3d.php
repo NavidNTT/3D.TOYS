@@ -55,17 +55,22 @@ class Media3d extends Model
      * {@see ProductMedia3D}. The job looks the row up by ID, and both models
      * share the `media3d` table, so the ID is interchangeable.
      * `saveQuietly()` in the job prevents an update loop here.
+     *
+     * Remote URLs (http(s)://…) are viewer fixtures, never dispatched — see
+     * ProductMedia3DObserver for the rationale.
      */
     protected static function booted(): void
     {
         static::created(function (Media3d $media) {
-            if (! empty($media->original_file_url)) {
+            if (! empty($media->original_file_url) && ! str_contains((string) $media->original_file_url, '://')) {
                 Optimize3DModelJob::dispatch($media->id);
             }
         });
 
         static::updated(function (Media3d $media) {
-            if ($media->wasChanged('original_file_url') && ! empty($media->original_file_url)) {
+            if ($media->wasChanged('original_file_url')
+                && ! empty($media->original_file_url)
+                && ! str_contains((string) $media->original_file_url, '://')) {
                 Optimize3DModelJob::dispatch($media->id);
             }
         });

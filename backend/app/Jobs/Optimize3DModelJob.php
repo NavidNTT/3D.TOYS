@@ -64,6 +64,22 @@ class Optimize3DModelJob implements ShouldQueue
             return;
         }
 
+        // Remote demo fixtures (e.g. the Khronos Duck.glb seeded by
+        // CatalogSeeder) are real viewer URLs, not files on the public disk.
+        // They arrive here when a model event fires outside the seeder's
+        // withoutEvents() guard (e.g. a legacy Media3d event, or an older
+        // queued job from before the guard existed). Re-downloading arbitrary
+        // URLs on the worker is out of scope, so skip quietly instead of
+        // throwing — a throw would retry, then land in failed_jobs on every
+        // fresh install and make the worker look broken.
+        if (str_contains((string) $media->original_file_url, '://')) {
+            Log::info('[Optimize3DModelJob] Remote model URL; skipping Draco optimization.', [
+                'id' => $media->id,
+            ]);
+
+            return;
+        }
+
         $relativeInput = $this->normalizeRelativePath($media->original_file_url);
         $disk = Storage::disk('public');
 

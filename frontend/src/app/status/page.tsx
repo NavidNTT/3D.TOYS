@@ -17,9 +17,10 @@ export const metadata: Metadata = {
 
 // Internal address: this component runs *inside* the nextjs.app container,
 // so it must talk to the stack over the compose network (service names),
-// not through the host's published ports.
-const INTERNAL_API = process.env.LARAVEL_INTERNAL_URL ?? 'http://localhost:8080';
-const PUBLIC_API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8080/api';
+// not through the host's published ports. The fallbacks only apply to a host
+// run (`npm run dev`), where the published port is the only way in.
+const INTERNAL_API = process.env.LARAVEL_INTERNAL_URL ?? 'http://localhost:8000';
+const PUBLIC_API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000/api';
 const MINIO_URL = process.env.NEXT_PUBLIC_MINIO_URL ?? 'http://localhost:9000';
 const MINIO_CONSOLE_URL =
   process.env.NEXT_PUBLIC_MINIO_CONSOLE_URL ?? 'http://localhost:9001';

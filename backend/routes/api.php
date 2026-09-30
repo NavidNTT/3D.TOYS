@@ -1,7 +1,9 @@
 <?php
 
 use App\Http\Controllers\Api\V1\AuthController;
+use App\Http\Controllers\Api\V1\CategoryController;
 use App\Http\Controllers\Api\V1\OrderController;
+use App\Http\Controllers\Api\V1\ProductController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -9,6 +11,30 @@ use Illuminate\Support\Facades\Route;
 | API routes (prefixed with /api by the framework)
 |--------------------------------------------------------------------------
 */
+
+/*
+|--------------------------------------------------------------------------
+| Catalog — public, cache-friendly reads for the storefront
+|--------------------------------------------------------------------------
+|
+| The Next.js server components fetch these while rendering the home page and
+| the product pages (frontend/src/services/categoryService.ts,
+| frontend/src/services/productService.ts), so they must stay
+| unauthenticated: names, prices and stock are public product data. Writes go
+| through the Filament admin panel, never through this API.
+|
+| The `api` limiter (60/minute) still applies, which is plenty for a page
+| whose fetches are cached for 30 seconds.
+*/
+Route::prefix('v1')->name('api.v1.')->group(function (): void {
+    Route::get('categories', [CategoryController::class, 'index'])->name('categories.index');
+
+    Route::get('products', [ProductController::class, 'index'])->name('products.index');
+
+    // Declared after the collection so `/products` matches first; a literal
+    // segment registered below `{slug}` would be swallowed by it.
+    Route::get('products/{slug}', [ProductController::class, 'show'])->name('products.show');
+});
 
 Route::prefix('v1/auth')->name('api.v1.auth.')->group(function (): void {
     // Public: request a one-time password. Throttled to 1 request / 2 minutes

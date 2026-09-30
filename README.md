@@ -21,7 +21,7 @@ traffic never leaves the host, and only the ports you need are published.
                         host (Windows / macOS / Linux)
                                     │
         ┌───────────────┬───────────┴──────────┬──────────────┬───────────────┐
-        │ :8090         │ :3000                │ :9000 :9002  │ :3307  :6380  │
+        │ :8000         │ :3000                │ :9000 :9002  │ :3307  :6380  │
         ▼               ▼                      ▼              ▼       ▼
   ┌───────────┐   ┌────────────┐        ┌────────────┐  ┌────────┐ ┌───────┐
   │  nginx    │   │ nextjs.app │        │   minio    │  │ mysql  │ │ redis │
@@ -44,7 +44,7 @@ traffic never leaves the host, and only the ports you need are published.
 
 | Service          | Image                       | Host URL / port                | Purpose                          |
 | ---------------- | --------------------------- | ------------------------------ | -------------------------------- |
-| `nginx`          | `nginx:1.27-alpine`         | http://localhost:8090          | Reverse proxy for the API        |
+| `nginx`          | `nginx:1.27-alpine`         | http://localhost:8000          | Reverse proxy for the API        |
 | `laravel.app`    | built from `docker/php`     | http://localhost:9090 (FPM)    | Laravel 12 API (php-fpm)         |
 | `laravel.worker` | same image                  | —                              | `php artisan queue:work redis`   |
 | `mysql`          | `mysql:8.0`                 | `localhost:3307`               | Primary datastore                |
@@ -53,9 +53,11 @@ traffic never leaves the host, and only the ports you need are published.
 |                  |                             | http://localhost:9002 (console)| MinIO web UI                     |
 | `nextjs.app`     | `node:22-bookworm-slim`     | http://localhost:3000          | Next.js 14 dev server (HMR)      |
 
-All published ports are configurable in `.env.docker`. The defaults are
-deliberately **not** 8080/3306/6379, because those are almost always already
-taken on a developer machine.
+All published ports are configurable in `.env.docker`. The API port
+(`NGINX_PORT=8000`) is what `APP_URL`, `NEXT_PUBLIC_API_URL` and every curl
+below point at; MySQL and Redis are deliberately moved off their defaults
+(3306/6379), because those are almost always already taken on a developer
+machine.
 
 ---
 
@@ -81,7 +83,7 @@ docker compose --env-file .env.docker exec laravel.app bootstrap-laravel.sh
 Open:
 
 * storefront → <http://localhost:3000>
-* API → <http://localhost:8090>
+* API → <http://localhost:8000>
 * MinIO console → <http://localhost:9002> (`toy_admin` / `toy_admin_secret`)
 
 The first `up` also runs `npm install` inside the frontend container (a few
@@ -139,20 +141,31 @@ Or open <http://localhost:9002> and log in with `MINIO_ROOT_USER` /
 
 ```bash
 # Host → API
-curl -i http://localhost:8090/up                 # → 200 (Laravel 12 health route)
+curl -i http://localhost:8000/up                 # → 200 (Laravel 12 health route)
+
+# Host → API, catalog (what the storefront renders); both must answer 200 JSON
+curl -s -o /dev/null -w '%{http_code}\n' http://localhost:8000/api/v1/categories  # → 200
+curl -s -o /dev/null -w '%{http_code}\n' http://localhost:8000/api/v1/products    # → 200
+curl -s http://localhost:8000/api/v1/products | head -c 200
 
 # Container → container, by service name (this is what server components use)
 docker compose --env-file .env.docker exec nextjs.app \
   node -e "fetch('http://nginx/health').then(r=>console.log('nginx says', r.status))"
 
+docker compose --env-file .env.docker exec nextjs.app \
+  node -e "fetch('http://nginx/api/v1/products').then(r=>console.log('catalog says', r.status))"
+
 docker compose --env-file .env.docker exec laravel.app \
   php -r 'echo "minio: ", @fsockopen("minio",9000) ? "reachable" : "unreachable", PHP_EOL;'
 ```
 
+`./verify-stack.sh` runs all of the above (plus container health, MySQL, Redis
+and MinIO) in one pass.
+
 The status page does this for real: `/status` is a server component that
 fetches Laravel's `/up` over `http://nginx` and renders **UP/DOWN** for both
 services, while the browser-side links use `NEXT_PUBLIC_API_URL`
-(`http://localhost:8090/api`). Seeing two green UP badges at
+(`http://localhost:8000/api`). Seeing two green UP badges at
 <http://localhost:3000/status> means the whole path works. (It lives at
 `/status` because `/` is now the customer-facing storefront.)
 
@@ -242,11 +255,54 @@ Every response — success or failure — uses the same envelope:
   "data": { "phone": ["شماره موبایل باید با ۰۹ شروع شود و ۱۱ رقم داشته باشد."] } }
 ```
 
+### Catalog API
+
+Public, unauthenticated reads that the storefront's server components call
+(`frontend/src/services/*.ts`). They answer with the same envelope as the rest
+of the API, and `price` / `compare_at_price` are JSON **numbers** — Eloquent's
+`decimal:2` cast returns an exact *string*, which is converted in
+`ProductResource` because the frontend contract and its fa-IR money formatter
+expect numbers.
+
+| Method | Endpoint                    | Auth | Purpose                                                    |
+| ------ | --------------------------- | ---- | ---------------------------------------------------------- |
+| GET    | `/api/v1/categories`        | —    | Every category with its `theme_config` palette             |
+| GET    | `/api/v1/products`          | —    | Published products, each with `category` + `media_3d`      |
+| GET    | `/api/v1/products/{slug}`   | —    | One published product, or the JSON 404 envelope             |
+
+```json
+{ "success": true, "message": "فهرست محصولات با موفقیت دریافت شد.", "data": [
+  { "id": 1, "name": "Rubber Duck — Classic Bath Toy",
+    "slug": "rubber-duck-classic-bath-toy", "price": 12.99,
+    "compare_at_price": 16.99, "currency": "USD", "stock": 42,
+    "attributes": { "Material": "Non-toxic ABS + plush" },
+    "category": { "id": 1, "name": "Bath Toys", "slug": "bath-toys", "theme_config": {} },
+    "media_3d": { "id": 1, "url": "http://…/Duck.glb", "format": "glb",
+                  "thumbnail_url": null, "lighting_preset": "studio",
+                  "camera_settings": {} } }
+] }
+```
+
+`media_3d` is `null` for a product without a stored model — that is what the
+storefront's placeholder panel keys off, so an unpublished model can never
+render a broken WebGL canvas. Seed the demo catalog (four categories, six
+products, one working 3D model) with:
+
+```bash
+docker compose --env-file .env.docker exec laravel.app \
+  php artisan db:seed --class=CatalogSeeder --force
+```
+
+Uploading a real `.glb`/`.gltf` through the admin panel (`/admin`, Filament)
+queues `Optimize3DModelJob`, which writes the Draco-compressed file and fills
+`optimized_file_url`; the API then serves that URL in preference to the
+original.
+
 ### Try the whole flow
 
 ```bash
 DC="docker compose --env-file .env.docker"
-API=http://localhost:8090/api/v1/auth
+API=http://localhost:8000/api/v1/auth
 
 # 1. request a code (seeded accounts: 09120000000 admin, 09121111111 customer)
 curl -s -X POST $API/otp/send -H 'Accept: application/json' \
@@ -373,7 +429,7 @@ refuses to install any 11.x release because of unpatched security advisories
 (`policy.advisories.block`). Set `LARAVEL_VERSION=^11.0` only if you also
 disable that policy knowingly.
 
-**Non-default host ports.** `NGINX_PORT=8090`, `MYSQL_PORT=3307`,
+**Non-default host ports.** `NGINX_PORT=8000`, `MYSQL_PORT=3307`,
 `REDIS_PORT=6380`, `PHP_FPM_PORT=9090`. If you already have another stack on
 8080/3306/6379/9001 (this machine does — a `3toys-*` project), the stack still
 boots without touching it.
@@ -422,7 +478,7 @@ The compose file is a *development* stack. Before real traffic:
 
 | Symptom | Cause / fix |
 | --- | --- |
-| `Bind for 0.0.0.0:8090 failed: port is already allocated` | Another stack owns the port. `docker ps --format "{{.Names}}\t{{.Ports}}"` then change `NGINX_PORT` (same for `MINIO_CONSOLE_PORT`, `MYSQL_PORT`, `REDIS_PORT`). |
+| `Bind for 0.0.0.0:8000 failed: port is already allocated` | Another stack owns the port. `docker ps --format "{{.Names}}\t{{.Ports}}"` then change `NGINX_PORT` (same for `MINIO_CONSOLE_PORT`, `MYSQL_PORT`, `REDIS_PORT`). |
 | `404 File not found.` from nginx, `[crit] stat() ... Permission denied` in `logs nginx` | Mount root not traversable. `docker compose --env-file .env.docker exec laravel.app chmod 755 /var/www/html` (the entrypoint also does this on boot). |
 | Laravel `/up` → 404 but nginx `/health` → 200 | Laravel isn't installed yet: run `bootstrap-laravel.sh`. |
 | `laravel.worker` logs "idling until composer.json appears" | Expected on a fresh clone — it starts the queue the moment the app is scaffolded. |

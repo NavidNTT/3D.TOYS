@@ -17,6 +17,9 @@ class DatabaseSeeder extends Seeder
      * Fixed phone numbers so you can log in immediately in development:
      * request an OTP for 09120000000 / 09121111111 and read the code from
      * storage/logs/laravel.log (the log SMS driver).
+     *
+     * The catalog is seeded too, otherwise the storefront has nothing to render
+     * and every list endpoint answers with an empty collection.
      */
     public function run(): void
     {
@@ -31,5 +34,7 @@ class DatabaseSeeder extends Seeder
             'phone' => '09121111111',
             'role' => UserRole::Customer,
         ]);
+
+        $this->call(CatalogSeeder::class);
     }
 }

@@ -45,7 +45,7 @@ APP_ENV=${APP_ENV:-local}
 APP_KEY=
 APP_DEBUG=${APP_DEBUG:-true}
 APP_TIMEZONE=UTC
-APP_URL=${APP_URL:-http://localhost:8080}
+APP_URL=${APP_URL:-http://localhost:8000}
 FRONTEND_URL=${FRONTEND_URL:-http://localhost:3000}
 
 LOG_CHANNEL=stderr
@@ -83,7 +83,8 @@ AWS_USE_PATH_STYLE_ENDPOINT=true
 AWS_URL=http://localhost:${MINIO_API_PORT:-9000}/${MINIO_BUCKET:-toy-store-assets}
 
 # ── Sanctum / CORS (SPA on a different port = cross-origin) ───
-SANCTUM_STATEFUL_DOMAINS=localhost:${FRONTEND_PORT:-3000},localhost:${NGINX_PORT:-8080}
+SANCTUM_STATEFUL_DOMAINS=localhost:${FRONTEND_PORT:-3000},127.0.0.1:${FRONTEND_PORT:-3000},localhost:${NGINX_PORT:-8000},127.0.0.1:${NGINX_PORT:-8000}
+CORS_ALLOWED_ORIGINS=http://localhost:${FRONTEND_PORT:-3000},http://127.0.0.1:${FRONTEND_PORT:-3000},http://localhost:${NGINX_PORT:-8000},http://127.0.0.1:${NGINX_PORT:-8000}
 EOF
 
 # ---------------------------------------------------------------------------
@@ -116,7 +117,7 @@ cat <<EOF
   ┌──────────────────────────────────────────────────────────────┐
   │  Laravel is ready.                                           │
   │                                                              │
-  │  Health       ${APP_URL:-http://localhost:8090}/up
+  │  Health       ${APP_URL:-http://localhost:8000}/up
   │  MinIO UI     http://localhost:${MINIO_CONSOLE_PORT:-9001}
   │  Next.js      ${FRONTEND_URL:-http://localhost:3000}
   │                                                              │
