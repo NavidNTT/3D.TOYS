@@ -8,6 +8,7 @@ use App\Http\Resources\OrderResource;
 use App\Services\Orders\OrderService;
 use App\Support\ApiResponse;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 
 /**
  * Order endpoints.
@@ -50,6 +51,28 @@ class OrderController extends Controller
             OrderResource::make($order),
             'سفارش شما با موفقیت ثبت شد.',
             201,
+        );
+    }
+
+    /**
+     * GET /api/v1/orders/my-orders (auth:sanctum)
+     *
+     * The signed-in customer's own order history, newest first. Scoping to
+     * `user_id` is the whole point: one customer can never read another's
+     * orders, and the eager-loaded lines keep the list to a single extra query
+     * instead of one per order.
+     */
+    public function myOrders(Request $request): JsonResponse
+    {
+        $orders = $request->user()
+            ->orders()
+            ->with('items')
+            ->latest('created_at')
+            ->get();
+
+        return ApiResponse::success(
+            OrderResource::collection($orders),
+            'فهرست سفارش‌های شما با موفقیت دریافت شد.',
         );
     }
 }

@@ -61,4 +61,8 @@ Route::middleware('auth:sanctum')->prefix('v1/orders')->name('api.v1.orders.')->
     // customer can track it and the shop can fulfil it. Guests are stopped by
     // the middleware before any validation runs.
     Route::post('checkout', [OrderController::class, 'checkout'])->name('checkout');
+
+    // The customer's own order history. Literal segment, and a GET, so it can
+    // never be mistaken for the checkout POST above.
+    Route::get('my-orders', [OrderController::class, 'myOrders'])->name('my-orders');
 });

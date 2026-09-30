@@ -2,11 +2,15 @@
 
 namespace Tests\Feature;
 
+use App\Enums\OrderStatus;
 use App\Enums\UserRole;
 use App\Filament\Resources\CategoryResource;
+use App\Filament\Resources\OrderResource;
 use App\Filament\Resources\ProductResource;
 use App\Models\Category;
 use App\Models\Media3d;
+use App\Models\Order;
+use App\Models\OrderItem;
 use App\Models\Product;
 use App\Models\User;
 use Filament\Facades\Filament;
@@ -110,5 +114,40 @@ class FilamentAdminPanelTest extends TestCase
         $this->actingAs($admin)->get(ProductResource::getUrl('index'))->assertSuccessful();
         $this->actingAs($admin)->get(ProductResource::getUrl('create'))->assertSuccessful();
         $this->actingAs($admin)->get(ProductResource::getUrl('edit', ['record' => $product]))->assertSuccessful();
+    }
+
+    public function test_admin_can_view_order_resource_pages_but_cannot_create_orders(): void
+    {
+        $admin = User::factory()->create(['role' => UserRole::Admin]);
+        $customer = User::factory()->create(['role' => UserRole::Customer]);
+        $product = Product::factory()->create();
+
+        $order = Order::query()->create([
+            'user_id' => $customer->id,
+            'order_number' => 'TS-260930-ABC123',
+            'total_amount' => 241.00,
+            'status' => OrderStatus::Pending,
+            'receiver_name' => 'علی رضایی',
+            'receiver_phone' => '09121234567',
+            'province' => 'تهران',
+            'city' => 'تهران',
+            'address' => 'خیابان آزادی، پلاک ۱۲، واحد ۳',
+            'postal_code' => '1234567890',
+            'notes' => 'لطفاً پیش از ارسال تماس بگیرید.',
+        ]);
+
+        OrderItem::query()->create([
+            'order_id' => $order->id,
+            'product_id' => $product->id,
+            'product_title' => 'ربات حلبی',
+            'quantity' => 2,
+            'unit_price' => 120.50,
+            'total_price' => 241.00,
+        ]);
+
+        $this->actingAs($admin)->get(OrderResource::getUrl('index'))->assertSuccessful();
+        $this->actingAs($admin)->get(OrderResource::getUrl('edit', ['record' => $order]))->assertSuccessful();
+
+        $this->assertFalse(OrderResource::canCreate());
     }
 }

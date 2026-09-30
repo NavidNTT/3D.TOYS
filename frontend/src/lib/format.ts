@@ -25,3 +25,32 @@ export function formatPriceFa(
     return `${new Intl.NumberFormat('fa-IR').format(value)} ${code}`;
   }
 }
+
+/**
+ * Groups a plain amount with Persian digits (e.g. `۱۲۳٬۴۵۶`).
+ *
+ * Used for order totals, which carry no currency code of their own — the
+ * storefront renders them with the Persian thousand separator. Decimals are
+ * shown only when they exist, so round amounts read as `۲۴۱`.
+ */
+export function formatNumberFa(value: number): string {
+  return new Intl.NumberFormat('fa-IR', { maximumFractionDigits: 2 }).format(
+    value,
+  );
+}
+
+/**
+ * Persian (fa-IR) calendar date, e.g. `۹ مهر ۱۴۰۵`.
+ *
+ * Returns an em dash for a missing or unparseable timestamp rather than
+ * `Invalid Date`; the API always sends ISO-8601 or null.
+ */
+export function formatDateFa(value: string | Date | null | undefined): string {
+  if (!value) return '—';
+
+  const date = value instanceof Date ? value : new Date(value);
+
+  if (Number.isNaN(date.getTime())) return '—';
+
+  return new Intl.DateTimeFormat('fa-IR', { dateStyle: 'medium' }).format(date);
+}

@@ -1,0 +1,6 @@
+# Draco decoder binaries are third-party build artifacts copied verbatim from
+# `node_modules/three/examples/jsm/libs/draco/gltf/` via `npm run sync:draco`.
+# Keep them byte-identical: never convert line endings, or the SHA-256 check
+# in `scripts/verify-draco.mjs` fails on Windows checkouts (core.autocrlf).
+frontend/public/draco/*.js binary
+frontend/public/draco/*.wasm binary

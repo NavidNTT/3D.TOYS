@@ -6,11 +6,15 @@ import { Center, useGLTF } from '@react-three/drei';
  * Local DRACOLoader path.
  *
  * `public/draco/` holds the official Draco decoders shipped with `three`
- * (`npm run sync:draco` keeps them in sync). drei defaults to Google's CDN
- * (`https://www.gstatic.com/draco/versioned/decoders/1.5.5/`), which we do not
- * want: a blocked CDN would break every Draco-compressed model.
+ * (copied from `node_modules/three/examples/jsm/libs/draco/`). drei defaults
+ * to Google's CDN (`https://www.gstatic.com/draco/versioned/decoders/1.5.5/`),
+ * which we do not want: a blocked CDN would break every Draco-compressed
+ * model. Serving from our own origin also avoids CORS errors.
  */
-export const DRACO_DECODER_PATH = '/draco/';
+export const DRACO_PATH = '/draco/';
+
+/** Backwards-compatible alias (existing imports use this name). */
+export const DRACO_DECODER_PATH = DRACO_PATH;
 
 /**
  * `false` attaches no DRACOLoader at all — used as the recovery step when a
@@ -23,7 +27,27 @@ export type DracoDecoderPath = string | false;
  * Make the local decoder the app-wide default, so any other `useGLTF(url)`
  * call (and every preload) resolves the decoder from our own origin too.
  */
-useGLTF.setDecoderPath(DRACO_DECODER_PATH);
+useGLTF.setDecoderPath(DRACO_PATH);
+
+function ToyModelWithDraco({ modelUrl }: { modelUrl: string }) {
+  const { scene } = useGLTF(modelUrl, DRACO_PATH);
+
+  return (
+    <Center top>
+      <primitive object={scene} />
+    </Center>
+  );
+}
+
+function ToyModelWithoutDraco({ modelUrl }: { modelUrl: string }) {
+  const { scene } = useGLTF(modelUrl, false);
+
+  return (
+    <Center top>
+      <primitive object={scene} />
+    </Center>
+  );
+}
 
 /**
  * Warm the loader cache for a model without rendering it (e.g. on hover or on
@@ -33,9 +57,13 @@ useGLTF.setDecoderPath(DRACO_DECODER_PATH);
  */
 export function preloadToyModel(
   modelUrl: string,
-  dracoDecoderPath: DracoDecoderPath = DRACO_DECODER_PATH,
+  dracoDecoderPath: DracoDecoderPath = DRACO_PATH,
 ): void {
-  useGLTF.preload(modelUrl, dracoDecoderPath);
+  if (dracoDecoderPath === false) {
+    useGLTF.preload(modelUrl, false);
+    return;
+  }
+  useGLTF.preload(modelUrl, DRACO_PATH);
 }
 
 /**
@@ -63,17 +91,20 @@ interface ToyModelProps {
  * Loads a .glb/.gltf model and centers it. `Center top` normalizes
  * position so models with arbitrary origins/offsets still sit
  * correctly on the Stage floor.
+ *
+ * Both the original (uncompressed `.glb`) and the Draco-compressed
+ * `_opt.glb` variants load through `ProductViewer3D` from the local
+ * `/draco/` decoders with no CDN or CORS errors.
  */
 export default function ToyModel({
   modelUrl,
-  dracoDecoderPath = DRACO_DECODER_PATH,
+  dracoDecoderPath = DRACO_PATH,
 }: ToyModelProps) {
-  const { scene } = useGLTF(modelUrl, dracoDecoderPath);
+  if (dracoDecoderPath === false) {
+    return <ToyModelWithoutDraco modelUrl={modelUrl} />;
+  }
 
-  return (
-    <Center top>
-      <primitive object={scene} />
-    </Center>
-  );
+  return <ToyModelWithDraco modelUrl={modelUrl} />;
 }
+
 

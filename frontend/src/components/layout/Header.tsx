@@ -83,6 +83,12 @@ export default function Header() {
               >
                 {user.name ?? user.phone}
               </span>
+              <Link
+                href="/orders"
+                className="rounded-lg border border-white/15 px-3 py-2 text-sm text-white/70 transition hover:bg-white/10 hover:text-white"
+              >
+                سفارش‌های من 📦
+              </Link>
               <button
                 type="button"
                 onClick={logout}
