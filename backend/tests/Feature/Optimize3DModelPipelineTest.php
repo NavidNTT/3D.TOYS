@@ -3,7 +3,6 @@
 namespace Tests\Feature;
 
 use App\Jobs\Optimize3DModelJob;
-use App\Models\Media3d;
 use App\Models\Product;
 use App\Models\ProductMedia3D;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -16,13 +15,13 @@ class Optimize3DModelPipelineTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_media3d_creation_dispatches_optimize_job(): void
+    public function test_product_media_3d_creation_dispatches_optimize_job(): void
     {
         Queue::fake();
 
         $product = Product::factory()->create();
 
-        $media = Media3d::create([
+        $media = ProductMedia3D::create([
             'product_id' => $product->id,
             'original_file_url' => 'models/3d/sample.glb',
         ]);
@@ -30,13 +29,13 @@ class Optimize3DModelPipelineTest extends TestCase
         Queue::assertPushed(Optimize3DModelJob::class, fn ($job) => $job->productMedia3DId === $media->id);
     }
 
-    public function test_media3d_update_without_file_change_does_not_dispatch(): void
+    public function test_product_media_3d_update_without_file_change_does_not_dispatch(): void
     {
         Queue::fake();
 
         $product = Product::factory()->create();
 
-        $media = Media3d::create([
+        $media = ProductMedia3D::create([
             'product_id' => $product->id,
             'original_file_url' => 'models/3d/sample.glb',
         ]);

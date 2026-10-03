@@ -32,8 +32,10 @@ class OrderItem extends Model
     protected function casts(): array
     {
         return [
-            'unit_price' => 'decimal:2',
-            'total_price' => 'decimal:2',
+            // Integer Toman: the snapshot keeps the exact amount that was
+            // charged, with no decimal rounding to reproduce later.
+            'unit_price' => 'integer',
+            'total_price' => 'integer',
             'quantity' => 'integer',
         ];
     }

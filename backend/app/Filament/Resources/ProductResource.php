@@ -43,7 +43,6 @@ class ProductResource extends Resource
                             ->live(onBlur: true)
                             ->afterStateUpdated(function (Set $set, ?string $state) {
                                 $set('slug', Str::slug($state ?? ''));
-                                $set('name', $state);
                             }),
                         TextInput::make('slug')
                             ->required()
@@ -59,9 +58,11 @@ class ProductResource extends Resource
                             ->preload()
                             ->nullable(),
                         TextInput::make('price')
+                            ->label('Price (Toman)')
                             ->required()
                             ->numeric()
-                            ->prefix('$')
+                            ->integer()
+                            ->suffix('تومان')
                             ->minValue(0),
                         TextInput::make('stock')
                             ->required()
@@ -69,14 +70,13 @@ class ProductResource extends Resource
                             ->integer()
                             ->default(0)
                             ->minValue(0),
-                        Select::make('status')
-                            ->options([
-                                'active' => 'Active',
-                                'draft' => 'Draft',
-                                'archived' => 'Archived',
-                            ])
-                            ->default('draft')
-                            ->required(),
+                        // The three-state `status` select was retired: `is_active`
+                        // is the single source of truth, because it is the column
+                        // the storefront listing and checkout already enforce.
+                        Toggle::make('is_active')
+                            ->label('Published')
+                            ->helperText('Unpublished products are hidden from the storefront and cannot be ordered.')
+                            ->default(true),
                         Textarea::make('description')
                             ->rows(4)
                             ->columnSpanFull(),
@@ -174,8 +174,7 @@ class ProductResource extends Resource
                 TextColumn::make('title')
                     ->label('Title')
                     ->searchable()
-                    ->sortable()
-                    ->default(fn (Product $record) => $record->name),
+                    ->sortable(),
                 TextColumn::make('sku')
                     ->label('SKU')
                     ->searchable()
@@ -184,19 +183,20 @@ class ProductResource extends Resource
                     ->label('Category')
                     ->sortable(),
                 TextColumn::make('price')
-                    ->money('USD')
+                    ->label('Price')
+                    ->numeric(decimalPlaces: 0, decimalSeparator: '.', thousandsSeparator: ',')
+                    ->suffix(' تومان')
                     ->sortable(),
                 TextColumn::make('stock')
                     ->numeric()
                     ->sortable(),
-                TextColumn::make('status')
-                    ->badge()
-                    ->color(fn (string $state): string => match ($state) {
-                        'active' => 'success',
-                        'draft' => 'warning',
-                        'archived' => 'danger',
-                        default => 'gray',
-                    }),
+                IconColumn::make('is_active')
+                    ->label('Published')
+                    ->boolean()
+                    ->trueIcon('heroicon-o-check-circle')
+                    ->falseIcon('heroicon-o-x-circle')
+                    ->trueColor('success')
+                    ->falseColor('gray'),
                 IconColumn::make('media3d.original_file_url')
                     ->label('3D Asset')
                     ->boolean()
@@ -219,11 +219,11 @@ class ProductResource extends Resource
             ->filters([
                 SelectFilter::make('category')
                     ->relationship('category', 'name'),
-                SelectFilter::make('status')
+                SelectFilter::make('is_active')
+                    ->label('Published')
                     ->options([
-                        'active' => 'Active',
-                        'draft' => 'Draft',
-                        'archived' => 'Archived',
+                        '1' => 'Published',
+                        '0' => 'Draft',
                     ]),
             ])
             ->actions([

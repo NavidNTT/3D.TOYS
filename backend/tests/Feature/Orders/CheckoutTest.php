@@ -52,7 +52,7 @@ class CheckoutTest extends TestCase
 
     public function test_a_guest_cannot_check_out(): void
     {
-        $product = Product::factory()->pricedAt(10)->create(['stock' => 5]);
+        $product = Product::factory()->pricedAt(1_000_000)->create(['stock' => 5]);
 
         $this->postJson(self::CHECKOUT, $this->payload([
             'items' => [['product_id' => $product->id, 'quantity' => 1]],
@@ -70,8 +70,8 @@ class CheckoutTest extends TestCase
     public function test_it_places_an_order_and_decrements_stock(): void
     {
         $user = $this->authenticate();
-        $product = Product::factory()->pricedAt(120.50)->create([
-            'name' => 'ربات حلبی',
+        $product = Product::factory()->pricedAt(1_250_000)->create([
+            'title' => 'ربات حلبی',
             'stock' => 10,
         ]);
 
@@ -91,10 +91,11 @@ class CheckoutTest extends TestCase
             ->assertJsonPath('data.items.0.product_title', 'ربات حلبی')
             ->assertJsonPath('data.items.0.quantity', 2);
 
-        // Money is returned as JSON numbers, not decimal strings.
-        $this->assertSame(241.0, (float) $response->json('data.total_amount'));
-        $this->assertSame(120.5, (float) $response->json('data.items.0.unit_price'));
-        $this->assertSame(241.0, (float) $response->json('data.items.0.total_price'));
+        // Money is returned as JSON integers: one Toman is the smallest unit, so
+        // there is no decimal part to round and no float noise to defend against.
+        $this->assertSame(2_500_000, $response->json('data.total_amount'));
+        $this->assertSame(1_250_000, $response->json('data.items.0.unit_price'));
+        $this->assertSame(2_500_000, $response->json('data.items.0.total_price'));
 
         $this->assertMatchesRegularExpression(
             '/^TS-\d{6}-[A-Z0-9]{6}$/',
@@ -104,15 +105,15 @@ class CheckoutTest extends TestCase
         $this->assertDatabaseHas('orders', [
             'user_id' => $user->id,
             'status' => OrderStatus::Pending->value,
-            'total_amount' => 241.0,
+            'total_amount' => 2_500_000,
         ]);
 
         $this->assertDatabaseHas('order_items', [
             'product_id' => $product->id,
             'product_title' => 'ربات حلبی',
-            'unit_price' => 120.5,
+            'unit_price' => 1_250_000,
             'quantity' => 2,
-            'total_price' => 241.0,
+            'total_price' => 2_500_000,
         ]);
 
         // Stock really moved.
@@ -122,7 +123,7 @@ class CheckoutTest extends TestCase
     public function test_prices_come_from_the_database_not_the_request(): void
     {
         $this->authenticate();
-        $product = Product::factory()->pricedAt(500)->create(['stock' => 5]);
+        $product = Product::factory()->pricedAt(500_000)->create(['stock' => 5]);
 
         // A tampered client: every amount it could try to inject.
         $response = $this->postJson(self::CHECKOUT, $this->payload([
@@ -139,16 +140,16 @@ class CheckoutTest extends TestCase
 
         $response->assertStatus(201);
 
-        // 2 × 500 from the row; nothing the client sent is stored.
-        $this->assertSame(1000.0, (float) $response->json('data.total_amount'));
-        $this->assertSame(500.0, (float) $response->json('data.items.0.unit_price'));
+        // 2 × 500,000 from the row; nothing the client sent is stored.
+        $this->assertSame(1_000_000, $response->json('data.total_amount'));
+        $this->assertSame(500_000, $response->json('data.items.0.unit_price'));
 
-        $this->assertDatabaseHas('orders', ['total_amount' => 1000.0]);
-        $this->assertDatabaseMissing('orders', ['total_amount' => 1.0]);
+        $this->assertDatabaseHas('orders', ['total_amount' => 1_000_000]);
+        $this->assertDatabaseMissing('orders', ['total_amount' => 1]);
         $this->assertDatabaseHas('order_items', [
             'product_id' => $product->id,
-            'unit_price' => 500.0,
-            'total_price' => 1000.0,
+            'unit_price' => 500_000,
+            'total_price' => 1_000_000,
         ]);
         $this->assertSame(3, $product->fresh()->stock);
     }
@@ -156,8 +157,8 @@ class CheckoutTest extends TestCase
     public function test_it_sums_several_lines(): void
     {
         $this->authenticate();
-        $first = Product::factory()->pricedAt(10.25)->create(['stock' => 10]);
-        $second = Product::factory()->pricedAt(3.75)->create(['stock' => 10]);
+        $first = Product::factory()->pricedAt(1_025_000)->create(['stock' => 10]);
+        $second = Product::factory()->pricedAt(375_000)->create(['stock' => 10]);
 
         $response = $this->postJson(self::CHECKOUT, $this->payload([
             'items' => [
@@ -166,8 +167,8 @@ class CheckoutTest extends TestCase
             ],
         ]));
 
-        // 30.75 + 15.00
-        $this->assertSame(45.75, (float) $response->json('data.total_amount'));
+        // 3,075,000 + 1,500,000
+        $this->assertSame(4_575_000, $response->json('data.total_amount'));
 
         $this->assertSame(7, $first->fresh()->stock);
         $this->assertSame(6, $second->fresh()->stock);
@@ -176,8 +177,8 @@ class CheckoutTest extends TestCase
     public function test_it_rejects_a_quantity_beyond_stock_without_touching_anything(): void
     {
         $this->authenticate();
-        $product = Product::factory()->pricedAt(30)->create([
-            'name' => 'خرس پولیشی',
+        $product = Product::factory()->pricedAt(300_000)->create([
+            'title' => 'خرس پولیشی',
             'stock' => 2,
         ]);
 
@@ -202,8 +203,8 @@ class CheckoutTest extends TestCase
     public function test_one_rejected_line_rolls_back_the_whole_order(): void
     {
         $this->authenticate();
-        $fine = Product::factory()->pricedAt(10)->create(['stock' => 10]);
-        $scarce = Product::factory()->pricedAt(10)->create(['stock' => 1]);
+        $fine = Product::factory()->pricedAt(1_000_000)->create(['stock' => 10]);
+        $scarce = Product::factory()->pricedAt(1_000_000)->create(['stock' => 1]);
 
         $this->postJson(self::CHECKOUT, $this->payload([
             'items' => [
@@ -224,7 +225,7 @@ class CheckoutTest extends TestCase
     public function test_a_published_product_with_no_stock_is_rejected(): void
     {
         $this->authenticate();
-        $product = Product::factory()->pricedAt(10)->outOfStock()->create();
+        $product = Product::factory()->pricedAt(1_000_000)->outOfStock()->create();
 
         $this->postJson(self::CHECKOUT, $this->payload([
             'items' => [['product_id' => $product->id, 'quantity' => 1]],
@@ -239,8 +240,8 @@ class CheckoutTest extends TestCase
     public function test_an_unpublished_product_cannot_be_ordered(): void
     {
         $this->authenticate();
-        $product = Product::factory()->pricedAt(10)->inactive()->create([
-            'name' => 'محصول آرشیو شده',
+        $product = Product::factory()->pricedAt(1_000_000)->inactive()->create([
+            'title' => 'محصول آرشیو شده',
             'stock' => 10,
         ]);
 
@@ -265,7 +266,7 @@ class CheckoutTest extends TestCase
         $other = User::factory()->create();
         $this->withToken($buyer->createToken('auth-token')->plainTextToken);
 
-        $product = Product::factory()->pricedAt(9.99)->create(['stock' => 3]);
+        $product = Product::factory()->pricedAt(999_000)->create(['stock' => 3]);
 
         $this->postJson(self::CHECKOUT, $this->payload([
             'items' => [['product_id' => $product->id, 'quantity' => 1]],
@@ -280,7 +281,7 @@ class CheckoutTest extends TestCase
     public function test_order_numbers_are_unique_and_traceable(): void
     {
         $this->authenticate();
-        $product = Product::factory()->pricedAt(5)->create(['stock' => 10]);
+        $product = Product::factory()->pricedAt(500_000)->create(['stock' => 10]);
 
         $first = $this->postJson(self::CHECKOUT, $this->payload([
             'items' => [['product_id' => $product->id, 'quantity' => 1]],
@@ -299,8 +300,8 @@ class CheckoutTest extends TestCase
     public function test_a_placed_order_keeps_its_snapshot_when_the_product_changes(): void
     {
         $this->authenticate();
-        $product = Product::factory()->pricedAt(20)->create([
-            'name' => 'نام قدیمی',
+        $product = Product::factory()->pricedAt(2_000_000)->create([
+            'title' => 'نام قدیمی',
             'stock' => 5,
         ]);
 
@@ -309,16 +310,16 @@ class CheckoutTest extends TestCase
         ]))->assertStatus(201);
 
         // The catalog moves on: rename + reprice.
-        $product->update(['name' => 'نام جدید', 'price' => 999]);
+        $product->update(['title' => 'نام جدید', 'price' => 99_900_000]);
 
         $order = Order::query()->sole();
 
-        $this->assertSame(40.0, (float) $order->total_amount);
+        $this->assertSame(4_000_000, $order->total_amount);
         $this->assertDatabaseHas('order_items', [
             'order_id' => $order->id,
             'product_title' => 'نام قدیمی',
-            'unit_price' => 20.0,
-            'total_price' => 40.0,
+            'unit_price' => 2_000_000,
+            'total_price' => 4_000_000,
         ]);
     }
 
@@ -326,7 +327,7 @@ class CheckoutTest extends TestCase
     public function test_it_validates_the_shipping_details(array $mutations, string $invalidKey): void
     {
         $this->authenticate();
-        $product = Product::factory()->pricedAt(10)->create(['stock' => 10]);
+        $product = Product::factory()->pricedAt(1_000_000)->create(['stock' => 10]);
 
         $payload = $this->payload([
             'items' => [['product_id' => $product->id, 'quantity' => 1]],
@@ -376,7 +377,7 @@ class CheckoutTest extends TestCase
     public function test_it_validates_each_cart_line(array $items, string $invalidKey): void
     {
         $this->authenticate();
-        $product = Product::factory()->pricedAt(10)->create(['stock' => 10]);
+        $product = Product::factory()->pricedAt(1_000_000)->create(['stock' => 10]);
 
         // Resolve the placeholder so those cases point at a real row.
         $items = array_map(static function (array $item) use ($product): array {

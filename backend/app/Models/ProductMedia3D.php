@@ -8,11 +8,12 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 /**
  * 3D media attached to a product.
  *
- * This is the canonical model name required by the Draco background
- * pipeline (`Optimize3DModelJob` / `ProductMedia3DObserver`). It shares
- * the legacy `media3d` table with {@see Media3d} so existing data,
+ * The single model for the `media3d` table: the duplicate legacy
+ * `Media3d` class was merged into this one, so the Draco background
+ * pipeline (`ProductMedia3DObserver` + `Optimize3DModelJob`), the
  * Filament uploads (`disk: public`, `directory: models/3d`) and the
- * `Product::media3d()` relation keep working untouched.
+ * `Product::media3d()` relation all resolve to exactly one Eloquent
+ * class and therefore exactly one set of model events.
  *
  * @property int $id
  * @property int $product_id

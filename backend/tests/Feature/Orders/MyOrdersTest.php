@@ -47,7 +47,7 @@ class MyOrdersTest extends TestCase
         $order = Order::query()->create(array_merge([
             'user_id' => $user->id,
             'order_number' => 'TS-260930-ABC123',
-            'total_amount' => 241.00,
+            'total_amount' => 2_500_000,
             'status' => OrderStatus::Pending,
             'receiver_name' => 'علی رضایی',
             'receiver_phone' => '09121234567',
@@ -63,8 +63,8 @@ class MyOrdersTest extends TestCase
             'product_id' => $product->id,
             'product_title' => 'ربات حلبی',
             'quantity' => 2,
-            'unit_price' => 120.50,
-            'total_price' => 241.00,
+            'unit_price' => 1_250_000,
+            'total_price' => 2_500_000,
         ]);
 
         if ($createdAt !== null) {
@@ -103,9 +103,9 @@ class MyOrdersTest extends TestCase
             ->assertJsonPath('data.0.items.0.product_title', 'ربات حلبی')
             ->assertJsonPath('data.0.items.0.quantity', 2);
 
-        $this->assertSame(241.0, (float) $response->json('data.0.total_amount'));
-        $this->assertSame(120.5, (float) $response->json('data.0.items.0.unit_price'));
-        $this->assertSame(241.0, (float) $response->json('data.0.items.0.total_price'));
+        $this->assertSame(2_500_000, $response->json('data.0.total_amount'));
+        $this->assertSame(1_250_000, $response->json('data.0.items.0.unit_price'));
+        $this->assertSame(2_500_000, $response->json('data.0.items.0.total_price'));
     }
 
     public function test_it_returns_orders_newest_first(): void

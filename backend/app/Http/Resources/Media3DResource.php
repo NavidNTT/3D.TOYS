@@ -2,7 +2,7 @@
 
 namespace App\Http\Resources;
 
-use App\Models\Media3d;
+use App\Models\ProductMedia3D;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 use Illuminate\Support\Facades\Storage;
@@ -15,7 +15,7 @@ use Illuminate\Support\Facades\Storage;
  * storefront never has to know that an upload lands in `original_file_url`
  * while the Draco optimizer writes `optimized_file_url` next to it.
  *
- * @mixin Media3d
+ * @mixin ProductMedia3D
  */
 class Media3DResource extends JsonResource
 {
@@ -53,9 +53,9 @@ class Media3DResource extends JsonResource
      * Optimized beats original, and "nothing at all" is a real state: the admin
      * can save viewer settings before (or without) uploading a model.
      */
-    public static function urlFor(?Media3d $media): ?string
+    public static function urlFor(?ProductMedia3D $media): ?string
     {
-        if (! $media instanceof Media3d) {
+        if (! $media instanceof ProductMedia3D) {
             return null;
         }
 

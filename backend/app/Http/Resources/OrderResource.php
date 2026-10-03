@@ -10,9 +10,8 @@ use Illuminate\Http\Resources\Json\JsonResource;
 /**
  * Public representation of a placed order, including its line snapshots.
  *
- * Amounts are cast to float on the way out: Eloquent's `decimal:2` cast hands
- * back an exact *string*, while the storefront's contract (`price: number`) and
- * its fa-IR formatter both expect JSON numbers.
+ * Amounts are integer Toman, matching the columns they snapshot: JSON numbers
+ * with no decimals, so the storefront formatter never has to round.
  *
  * @mixin Order
  */
@@ -28,7 +27,7 @@ class OrderResource extends JsonResource
             'order_number' => $this->order_number,
             'status' => $this->status->value,
             'status_label' => $this->status->label(),
-            'total_amount' => (float) $this->total_amount,
+            'total_amount' => (int) $this->total_amount,
 
             // Shipping snapshot, exactly as it was entered for this order.
             'receiver_name' => $this->receiver_name,
@@ -45,9 +44,9 @@ class OrderResource extends JsonResource
                 ->map(fn (OrderItem $item): array => [
                     'product_id' => $item->product_id,
                     'product_title' => $item->product_title,
-                    'unit_price' => (float) $item->unit_price,
-                    'quantity' => $item->quantity,
-                    'total_price' => (float) $item->total_price,
+                    'unit_price' => (int) $item->unit_price,
+                    'quantity' => (int) $item->quantity,
+                    'total_price' => (int) $item->total_price,
                 ])
                 ->all()),
         ];

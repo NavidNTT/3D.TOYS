@@ -3,8 +3,8 @@
 namespace Database\Seeders;
 
 use App\Models\Category;
-use App\Models\Media3d;
 use App\Models\Product;
+use App\Models\ProductMedia3D;
 use Illuminate\Database\Seeder;
 
 /**
@@ -99,6 +99,11 @@ class CatalogSeeder extends Seeder
     /**
      * Products. `$definition['category']` holds the category *slug*, so the
      * data below stays readable and ids are resolved at seed time.
+     *
+     * Prices are whole Toman (the column is an integer, and one Toman is the
+     * smallest unit). The amounts below are the same numbers the demo USD
+     * catalog was converted to by the `consolidate_products_columns`
+     * migration, so re-seeding is idempotent with an already-migrated database.
      */
     private function seedProducts(): void
     {
@@ -106,11 +111,11 @@ class CatalogSeeder extends Seeder
             [
                 'slug' => 'rubber-duck-classic-bath-toy',
                 'category' => 'bath-toys',
-                'name' => 'Rubber Duck — Classic Bath Toy',
+                'title' => 'Rubber Duck — Classic Bath Toy',
                 'sku' => 'TOY-DUCK-001',
                 'description' => 'A timeless floating companion, rendered live in 3D. Inspect every angle in the viewer — what you spin is what ships.',
-                'price' => 12.99,
-                'compare_at_price' => 16.99,
+                'price' => 1_299_000,
+                'compare_at_price' => 1_699_000,
                 'stock' => 42,
                 'attributes' => [
                     'Material' => 'Non-toxic ABS + plush',
@@ -134,10 +139,10 @@ class CatalogSeeder extends Seeder
             [
                 'slug' => 'splash-squad-submarine',
                 'category' => 'bath-toys',
-                'name' => 'Splash Squad Submarine',
+                'title' => 'Splash Squad Submarine',
                 'sku' => 'TOY-SUB-002',
                 'description' => 'Bath-time exploration vessel with a spinning propeller and a watertight crew hatch.',
-                'price' => 18.5,
+                'price' => 1_850_000,
                 'compare_at_price' => null,
                 'stock' => 25,
                 'attributes' => [
@@ -148,11 +153,11 @@ class CatalogSeeder extends Seeder
             [
                 'slug' => 'interlocking-blocks-500',
                 'category' => 'building-blocks',
-                'name' => 'Interlocking Blocks — 500 Piece Set',
+                'title' => 'Interlocking Blocks — 500 Piece Set',
                 'sku' => 'TOY-BLK-500',
                 'description' => 'Five hundred precision-moulded blocks with a 0.02 mm tolerance, so towers actually stay towers.',
-                'price' => 64.0,
-                'compare_at_price' => 79.0,
+                'price' => 6_400_000,
+                'compare_at_price' => 7_900_000,
                 'stock' => 12,
                 'attributes' => [
                     'Pieces' => 500,
@@ -164,10 +169,10 @@ class CatalogSeeder extends Seeder
             [
                 'slug' => 'magnetic-tiles-starter-100',
                 'category' => 'building-blocks',
-                'name' => 'Magnetic Tiles — 100 Piece Starter',
+                'title' => 'Magnetic Tiles — 100 Piece Starter',
                 'sku' => 'TOY-MAG-100',
                 'description' => 'Translucent magnetic tiles for two-dimensional thinkers who are not ready to read instructions.',
-                'price' => 48.25,
+                'price' => 4_825_000,
                 'compare_at_price' => null,
                 'stock' => 30,
                 'attributes' => [
@@ -179,10 +184,10 @@ class CatalogSeeder extends Seeder
             [
                 'slug' => 'astronaut-figure-seraph',
                 'category' => 'collectible-figures',
-                'name' => 'Astronaut Figure — SERAPH Edition',
+                'title' => 'Astronaut Figure — SERAPH Edition',
                 'sku' => 'TOY-FIG-009',
                 'description' => 'Hand-finished resin figure on a weighted base, numbered on the underside.',
-                'price' => 129.0,
+                'price' => 12_900_000,
                 'compare_at_price' => null,
                 'stock' => 4,
                 'attributes' => [
@@ -194,13 +199,13 @@ class CatalogSeeder extends Seeder
             [
                 'slug' => 'trail-blazer-4x4',
                 'category' => 'remote-control',
-                'name' => 'Trail Blazer 4x4 Rock Crawler',
+                'title' => 'Trail Blazer 4x4 Rock Crawler',
                 'sku' => 'TOY-RC-014',
                 'description' => 'Two-speed gearbox, oil-filled shocks and a 40 minute run time on rough terrain.',
                 // Deliberately out of stock: the storefront's "Sold out" badge
                 // and the disabled checkout button are part of the demo.
-                'price' => 189.99,
-                'compare_at_price' => 219.99,
+                'price' => 18_999_000,
+                'compare_at_price' => 21_999_000,
                 'stock' => 0,
                 'attributes' => [
                     'Scale' => '1:10',
@@ -217,19 +222,19 @@ class CatalogSeeder extends Seeder
                 ['slug' => $definition['slug']],
                 [
                     'category_id' => $category?->id,
-                    'name' => $definition['name'],
-                    // The storefront renders `name`, the admin panel edits
-                    // `title`; Product::booted() keeps the two in sync, and
-                    // both are set here so the row is right either way.
-                    'title' => $definition['name'],
+                    // `title` is the single name column; the duplicated `name`
+                    // column and the hook that mirrored it were removed.
+                    'title' => $definition['title'],
                     'sku' => $definition['sku'],
                     'description' => $definition['description'],
+                    // Whole Toman, matching the column type.
                     'price' => $definition['price'],
                     'compare_at_price' => $definition['compare_at_price'],
-                    'currency' => 'USD',
+                    'currency' => 'IRT',
                     'stock' => $definition['stock'],
+                    // `is_active` replaced the retired three-state `status`
+                    // column; this is the flag the storefront reads.
                     'is_active' => true,
-                    'status' => 'active',
                     'attributes' => $definition['attributes'],
                 ],
             );
@@ -243,20 +248,20 @@ class CatalogSeeder extends Seeder
     /**
      * Attach the 3D asset and its viewer settings to a product.
      *
-     * Wrapped in `withoutEvents()` deliberately. The `Media3d` model (and the
-     * `ProductMedia3D` observer) dispatch `Optimize3DModelJob` the moment
-     * `original_file_url` is set, and that job expects a real file on the
-     * `public` disk: dispatch it for a fixture pointing at a remote demo URL
-     * and the queue can only fail, filling `failed_jobs` on every fresh
-     * install. Fixtures are written quietly; only real uploads (admin panel,
-     * importer) go through the Draco pipeline.
+     * Wrapped in `withoutEvents()` deliberately. `ProductMedia3D` (through its
+     * observer) dispatches `Optimize3DModelJob` the moment `original_file_url`
+     * is set, and that job expects a real file on the `public` disk: dispatch it
+     * for a fixture pointing at a remote demo URL and the queue can only fail,
+     * filling `failed_jobs` on every fresh install. Fixtures are written
+     * quietly; only real uploads (admin panel, importer) go through the Draco
+     * pipeline.
      *
      * @param  array<string, mixed>  $definition
      */
     private function seedMedia(Product $product, array $definition): void
     {
-        Media3d::withoutEvents(function () use ($product, $definition): void {
-            Media3d::query()->updateOrCreate(
+        ProductMedia3D::withoutEvents(function () use ($product, $definition): void {
+            ProductMedia3D::query()->updateOrCreate(
                 ['product_id' => $product->id],
                 [
                     'original_file_url' => $definition['model_url'],

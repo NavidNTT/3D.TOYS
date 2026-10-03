@@ -8,10 +8,10 @@ use App\Filament\Resources\CategoryResource;
 use App\Filament\Resources\OrderResource;
 use App\Filament\Resources\ProductResource;
 use App\Models\Category;
-use App\Models\Media3d;
 use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\Product;
+use App\Models\ProductMedia3D;
 use App\Models\User;
 use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -89,19 +89,18 @@ class FilamentAdminPanelTest extends TestCase
         $product = Product::query()->create([
             'category_id' => $category->id,
             'title' => 'Vintage Astro Robot',
-            'name' => 'Vintage Astro Robot',
             'slug' => 'vintage-astro-robot',
             'sku' => 'TOY-ASTRO-001',
-            'price' => 49.99,
+            'price' => 4_999_000,
             'stock' => 10,
-            'status' => 'active',
+            'is_active' => true,
             'attributes' => [
                 'Material' => 'Die-cast metal',
                 'Scale' => '1:12',
             ],
         ]);
 
-        Media3d::query()->create([
+        ProductMedia3D::query()->create([
             'product_id' => $product->id,
             'original_file_url' => 'models/3d/astro.glb',
             'thumbnail_url' => 'models/thumbnails/astro.png',
@@ -125,7 +124,7 @@ class FilamentAdminPanelTest extends TestCase
         $order = Order::query()->create([
             'user_id' => $customer->id,
             'order_number' => 'TS-260930-ABC123',
-            'total_amount' => 241.00,
+            'total_amount' => 2_500_000,
             'status' => OrderStatus::Pending,
             'receiver_name' => 'علی رضایی',
             'receiver_phone' => '09121234567',
@@ -141,8 +140,8 @@ class FilamentAdminPanelTest extends TestCase
             'product_id' => $product->id,
             'product_title' => 'ربات حلبی',
             'quantity' => 2,
-            'unit_price' => 120.50,
-            'total_price' => 241.00,
+            'unit_price' => 1_250_000,
+            'total_price' => 2_500_000,
         ]);
 
         $this->actingAs($admin)->get(OrderResource::getUrl('index'))->assertSuccessful();

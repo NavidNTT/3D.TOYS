@@ -27,10 +27,10 @@ class AppServiceProvider extends ServiceProvider
         $this->configureRateLimiting();
 
         // Draco pipeline: auto-dispatch optimization when a 3D file is set.
-        // The observer covers the canonical ProductMedia3D model; the legacy
-        // Media3d model self-registers its own dispatch hooks in booted()
-        // (it is the model Filament's `relationship('media3d')` saves through).
-        // Separate Eloquent classes => separate events => no double dispatch.
+        // `ProductMedia3D` is the one model for the `media3d` table (the
+        // duplicate legacy `Media3d` model was merged into it in the Phase 1
+        // cleanup), so this observer is the single place where a 3D upload
+        // reaches the queue — exactly one job per save.
         ProductMedia3D::observe(ProductMedia3DObserver::class);
     }
 

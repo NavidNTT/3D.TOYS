@@ -21,14 +21,15 @@ class ProductFactory extends Factory
             // No category by default: the relation is optional, so tests that
             // do not care about theming never need a categories row.
             'category_id' => null,
-            'name' => fake()->words(3, true),
+            'title' => ucwords(fake()->words(3, true)),
             'slug' => fake()->unique()->slug(3),
             'description' => fake()->sentence(),
-            // Two decimals, because that is what the column stores and what
-            // checkout must reproduce exactly.
-            'price' => fake()->randomFloat(2, 5, 500),
+            // Integer Toman: the column stores whole Toman, and checkout has to
+            // reproduce this number exactly. Prices look like a real toy
+            // (۵۰٬۰۰۰ – ۵٬۰۰۰٬۰۰۰ تومان), not like a US catalogue.
+            'price' => fake()->numberBetween(50_000, 5_000_000),
             'compare_at_price' => null,
-            'currency' => 'USD',
+            'currency' => 'IRT',
             'stock' => fake()->numberBetween(1, 50),
             'is_active' => true,
             'attributes' => ['Material' => 'ABS'],
@@ -56,9 +57,9 @@ class ProductFactory extends Factory
     }
 
     /**
-     * A fixed price, so assertions can be exact.
+     * A fixed price in Toman, so assertions can be exact integers.
      */
-    public function pricedAt(float $price): static
+    public function pricedAt(int $price): static
     {
         return $this->state(fn (array $attributes) => [
             'price' => $price,

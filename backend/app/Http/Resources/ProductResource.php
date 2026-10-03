@@ -11,9 +11,9 @@ use Illuminate\Http\Resources\Json\JsonResource;
  *
  * Two conventions worth keeping:
  *
- *  - Money and counters are cast to real JSON numbers. Eloquent's `decimal:2`
- *    cast returns an exact *string*, while the frontend contract
- *    (`price: number`) and its fa-IR money formatter both expect numbers.
+ *  - Money is integer Toman (one Toman is the smallest unit) and counters are
+ *    integers. Eloquent returns them as PHP ints via the model casts, so the
+ *    JSON carries real numbers with no decimal point anywhere.
  *  - `category` and `media_3d` are always present, `null` when absent, rather
  *    than omitted. The storefront's types are nullable, so an explicit null
  *    keeps the shape stable no matter which relations were eager-loaded.
@@ -29,14 +29,14 @@ class ProductResource extends JsonResource
     {
         return [
             'id' => $this->id,
-            'name' => $this->name,
+            'title' => $this->title,
             'slug' => $this->slug,
             'description' => $this->description,
 
-            'price' => (float) $this->price,
+            'price' => (int) $this->price,
             'compare_at_price' => $this->compare_at_price === null
                 ? null
-                : (float) $this->compare_at_price,
+                : (int) $this->compare_at_price,
             'currency' => $this->currency,
 
             'stock' => (int) $this->stock,

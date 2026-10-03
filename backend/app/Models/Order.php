@@ -43,7 +43,8 @@ class Order extends Model
     protected function casts(): array
     {
         return [
-            'total_amount' => 'decimal:2',
+            // Integer Toman, like every other amount in the shop.
+            'total_amount' => 'integer',
             'status' => OrderStatus::class,
         ];
     }

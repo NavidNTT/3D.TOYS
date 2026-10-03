@@ -27,7 +27,6 @@ class Product extends Model
      */
     protected $fillable = [
         'category_id',
-        'name',
         'title',
         'slug',
         'sku',
@@ -37,42 +36,23 @@ class Product extends Model
         'currency',
         'stock',
         'is_active',
-        'status',
         'attributes',
     ];
 
     /**
-     * Boot the model. Keep name and title in sync so both storefront / checkout and admin work seamlessly.
-     */
-    protected static function booted(): void
-    {
-        static::saving(function (Product $product) {
-            if (empty($product->name) && ! empty($product->title)) {
-                $product->name = $product->title;
-            } elseif (empty($product->title) && ! empty($product->name)) {
-                $product->title = $product->name;
-            }
-
-            if (! empty($product->status)) {
-                $product->is_active = ($product->status === 'active');
-            } elseif (isset($product->is_active)) {
-                $product->status = $product->is_active ? 'active' : 'draft';
-            }
-        });
-    }
-
-    /**
      * Get the attributes that should be cast.
+     *
+     * Money is integer Toman. One Toman is the smallest unit the shop charges,
+     * so `price` and `compare_at_price` are exact integers: no float, and no
+     * binary-artifact rounding, ever reaches a stored or computed total.
      *
      * @return array<string, string>
      */
     protected function casts(): array
     {
         return [
-            // Stored as exact decimals in the database; the cast keeps PHP from
-            // turning them into floats with binary artifacts.
-            'price' => 'decimal:2',
-            'compare_at_price' => 'decimal:2',
+            'price' => 'integer',
+            'compare_at_price' => 'integer',
             'stock' => 'integer',
             'is_active' => 'boolean',
             'attributes' => 'array',
@@ -98,11 +78,15 @@ class Product extends Model
     /**
      * 3D media and viewer settings attached to this product.
      *
-     * @return HasOne<Media3d, $this>
+     * `ProductMedia3D` is the canonical model for the `media3d` table: it owns
+     * the Draco auto-dispatch (`ProductMedia3DObserver` + `Optimize3DModelJob`).
+     * The legacy `Media3d` model was merged into it during the Phase 1 cleanup.
+     *
+     * @return HasOne<ProductMedia3D, $this>
      */
     public function media3d(): HasOne
     {
-        return $this->hasOne(Media3d::class);
+        return $this->hasOne(ProductMedia3D::class);
     }
 }
 

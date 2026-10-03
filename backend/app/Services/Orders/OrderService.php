@@ -19,7 +19,7 @@ use Illuminate\Support\Str;
  *
  *  1. The client never decides the price. Amounts are read from the product row
  *     inside the same locked read that checks stock, so a request cannot buy a
- *     $500 toy for $1.
+ *     500,000 Toman toy for 1,000 Toman.
  *  2. Stock never goes negative and never leaks. Validation, decrement and the
  *     order insert share one transaction, so a rejected line rolls back the
  *     whole cart — a partially-created order can never hold stock hostage.
@@ -49,7 +49,7 @@ class OrderService
                 // A product deleted between validation and this locked read, or
                 // unpublished in the meantime.
                 if (! $product instanceof Product || ! $product->is_active) {
-                    throw new ProductUnavailableException($productId, $product?->name);
+                    throw new ProductUnavailableException($productId, $product?->title);
                 }
 
                 // Checked against the locked row, so a concurrent checkout
@@ -57,20 +57,22 @@ class OrderService
                 if ($product->stock < $quantity) {
                     throw new InsufficientStockException(
                         $product->id,
-                        $product->name,
+                        $product->title,
                         $quantity,
                         $product->stock,
                     );
                 }
 
-                $unitPrice = (float) $product->price;
+                // Integer Toman straight from the cast — no float conversion,
+                // so the amount written to the invoice is exact.
+                $unitPrice = (int) $product->price;
 
                 $lines[] = [
                     'product_id' => $product->id,
-                    'product_title' => $product->name,
+                    'product_title' => $product->title,
                     'unit_price' => $unitPrice,
                     'quantity' => $quantity,
-                    'total_price' => $this->lineTotal($unitPrice, $quantity),
+                    'total_price' => $unitPrice * $quantity,
                 ];
 
                 // Safe: this row stays locked until the transaction commits.
@@ -123,26 +125,18 @@ class OrderService
     }
 
     /**
-     * Line total from the *database* price.
+     * Order total: the sum of the line totals, never a value taken from the
+     * request.
      *
-     * The cast reads the exact decimal as a string; the multiplication happens
-     * in one step and is rounded before it is written back to a decimal column,
-     * so float noise never reaches the stored amount.
-     */
-    private function lineTotal(float $unitPrice, int $quantity): float
-    {
-        return round($unitPrice * $quantity, 2);
-    }
-
-    /**
-     * Order total: the sum of the already-rounded line totals, never a value
-     * taken from the request.
+     * Integer arithmetic throughout. With Toman there is no sub-unit to round,
+     * so the sum is exact by construction and there is no float noise to
+     * defend against.
      *
      * @param  array<int, array<string, mixed>>  $lines
      */
-    private function total(array $lines): float
+    private function total(array $lines): int
     {
-        return round(array_sum(array_column($lines, 'total_price')), 2);
+        return (int) array_sum(array_column($lines, 'total_price'));
     }
 
     /**
