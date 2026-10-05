@@ -15,15 +15,29 @@ export interface ApiEnvelope<T> {
 }
 
 /**
- * Shape returned when a controller paginates: Laravel nests the rows under
- * `data` inside the envelope, alongside the paging metadata.
+ * Paginated payload built explicitly by ProductController::paginatedPayload
+ * (NOT Laravel's default paginator — ApiResponse's envelope bypasses the
+ * response pipeline that attaches links/meta, so the controller assembles
+ * them by hand):
+ *
+ *   data: { data: [...rows], meta: {...}, links: {...} }
  */
 export interface Paginated<T> {
   data: T[];
-  current_page?: number;
-  last_page?: number;
-  per_page?: number;
-  total?: number;
+  meta: {
+    current_page: number;
+    per_page: number;
+    last_page: number;
+    total: number;
+    from: number | null;
+    to: number | null;
+  };
+  links: {
+    first: string | null;
+    prev: string | null;
+    next: string | null;
+    last: string | null;
+  };
 }
 
 /**
@@ -37,6 +51,15 @@ export function unwrapCollection<T>(
   if (!payload) return [];
   if (Array.isArray(payload)) return payload;
   return Array.isArray(payload.data) ? payload.data : [];
+}
+
+/** Query accepted by GET /api/v1/products (see ProductIndexRequest). */
+export interface ProductQuery {
+  search?: string;
+  category?: string;
+  in_stock?: boolean;
+  page?: number;
+  per_page?: number;
 }
 
 /** Environment presets available to drei's <Environment /> / <Stage />. */
@@ -119,15 +142,16 @@ export type ProductAttributes =
   | Record<string, ProductAttributeValue>
   | ProductAttribute[];
 
-/** Product detail resource returned by GET /api/v1/products/{slug}. */
+/** Product row, exactly as App\Http\Resources\ProductResource serialises it. */
 export interface Product {
   id: number;
-  name: string;
+  title: string;
   slug: string;
   description: string | null;
+  /** Integer Toman — the smallest unit is 1 Toman, no decimals anywhere. */
   price: number;
   compare_at_price?: number | null;
-  /** ISO-4217 code; the storefront defaults to USD when null. */
+  /** Always `IRT`; kept so the contract survives a future currency. */
   currency?: string | null;
   stock: number;
   is_active?: boolean;

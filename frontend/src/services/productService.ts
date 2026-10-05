@@ -4,6 +4,7 @@ import {
   type ApiEnvelope,
   type Paginated,
   type Product,
+  type ProductQuery,
 } from '@/src/types/product';
 
 /**
@@ -56,14 +57,23 @@ export async function getProductBySlug(slug: string): Promise<Product | null> {
 /**
  * Fetches the storefront's product listing (GET /api/v1/products).
  *
- * Tolerates both a plain array and a Laravel paginator, so the API is free to
- * add paging later without a frontend change.
- *
- * @throws Error when the catalog cannot be read — an empty grid would be
- *         indistinguishable from "the shop is empty".
+ * Reads the server's paginated envelope (`data.data` + `data.meta`) and
+ * returns rows plus paging metadata, so category/search pages can render
+ * their grids and pagination controls from one call.
  */
-export async function getAllProducts(): Promise<Product[]> {
-  const response = await catalogFetch('/products');
+export async function getProducts(
+  query: ProductQuery = {},
+): Promise<{ items: Product[]; meta: Paginated<Product>['meta'] | null }> {
+  const params = new URLSearchParams();
+
+  if (query.search) params.set('search', query.search);
+  if (query.category) params.set('category', query.category);
+  if (query.in_stock) params.set('in_stock', '1');
+  if (query.page) params.set('page', String(query.page));
+  if (query.per_page) params.set('per_page', String(query.per_page));
+
+  const suffix = params.size > 0 ? `?${params.toString()}` : '';
+  const response = await catalogFetch(`/products${suffix}`);
 
   if (!response.ok) {
     throw new Error(
@@ -75,5 +85,27 @@ export async function getAllProducts(): Promise<Product[]> {
     Product[] | Paginated<Product>
   >;
 
-  return unwrapCollection(payload?.data);
+  const data = payload?.data;
+
+  // The paged shape the API always sends (see ProductController).
+  if (data && !Array.isArray(data) && Array.isArray(data.data)) {
+    return { items: data.data, meta: data.meta ?? null };
+  }
+
+  return { items: unwrapCollection(data), meta: null };
+}
+
+/**
+ * Fetches the storefront's product listing (GET /api/v1/products).
+ *
+ * Rows only — for callers that do not render pagination (homepage rails).
+ * Paging callers should use {@link getProducts} instead.
+ *
+ * @throws Error when the catalog cannot be read — an empty grid would be
+ *         indistinguishable from "the shop is empty".
+ */
+export async function getAllProducts(): Promise<Product[]> {
+  const { items } = await getProducts();
+
+  return items;
 }

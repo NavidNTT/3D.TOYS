@@ -5,17 +5,17 @@ import type { Product } from '@/src/types/product';
 /**
  * A cart line.
  *
- * The product is snapshotted rather than referenced by id, so the drawer can
- * render names/prices/thumbnails without re-fetching the catalog. The tradeoff
- * is staleness: a price changed after the item was added only shows up once the
- * line is re-added (a server-side revalidation at checkout is the real fix).
+ * Only the product's identity and quantity are persisted; every rendered price
+ * comes from the API (Phase 2.6). Display fields (title/thumbnail) are a
+ * render-time convenience — they must never be used as a price source.
  */
 export interface CartItem {
   productId: number;
   slug: string;
-  name: string;
-  /** Unit price, in `currency`. */
+  title: string;
+  /** Unit price in Toman, refreshed from the API before it is rendered. */
   price: number;
+  /** Always IRT; kept so the contract survives a future currency. */
   currency: string | null;
   thumbnailUrl: string | null;
   quantity: number;
@@ -112,7 +112,7 @@ export const useCartStore = create<CartState>()(
               {
                 productId: product.id,
                 slug: product.slug,
-                name: product.name,
+                title: product.title,
                 price: product.price,
                 currency: product.currency ?? null,
                 thumbnailUrl: product.media_3d?.thumbnail_url ?? null,

@@ -2,10 +2,6 @@
 const nextConfig = {
   reactStrictMode: true,
 
-  // Bind mounts inside a container: keep webpack's polling cache small and
-  // readable from the host, and don't fail the build on lint nits.
-  eslint: { ignoreDuringBuilds: false },
-
   images: {
     // 3D thumbnails are served straight out of MinIO over HTTP in dev.
     remotePatterns: [
@@ -16,10 +12,9 @@ const nextConfig = {
     formats: ['image/avif', 'image/webp'],
   },
 
-  experimental: {
-    // 3D viewers ship as sizeable client bundles; these keep dev reloads fast.
-    optimizePackageImports: ['three', '@react-three/drei'],
-  },
+  // 3D viewers ship as sizeable client bundles; this keeps dev reloads fast.
+  // (Stays top-level in Next 16 — `experimental.optimizePackageImports` warns.)
+  optimizePackageImports: ['three', '@react-three/drei'],
 };
 
 export default nextConfig;

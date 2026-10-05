@@ -1,41 +1,27 @@
 /**
  * Persian (fa-IR) price formatting.
  *
- * The storefront serves Iranian customers, so amounts are rendered with Persian
- * digits and the Persian decimal separator (e.g. `‎$۱۲٫۹۹`). The currency code
- * always comes from the API (`products.currency`); the fallback only applies
- * when a row that predates that column — or a fixture — omits it.
+ * Prices are integer Toman (the API's smallest unit is 1 Toman — no decimals
+ * anywhere, see the Phase-1 money migration). Rendering is `fa-IR` grouping
+ * with Persian digits plus the word تومان, e.g. `۱٬۲۵۰٬۰۰۰ تومان`. The
+ * `currency` argument is accepted for forward-compatibility only and ignored.
  */
-export const DEFAULT_CURRENCY = 'USD';
+export function formatPriceFa(value: number): string {
+  const rounded = Math.trunc(value);
 
-export function formatPriceFa(
-  value: number,
-  currency?: string | null,
-): string {
-  const code = currency?.trim() || DEFAULT_CURRENCY;
-
-  try {
-    return new Intl.NumberFormat('fa-IR', {
-      style: 'currency',
-      currency: code,
-      maximumFractionDigits: 2,
-    }).format(value);
-  } catch {
-    // Unknown ISO code in the data: keep the Persian digits, drop the symbol.
-    return `${new Intl.NumberFormat('fa-IR').format(value)} ${code}`;
-  }
+  return `${new Intl.NumberFormat('fa-IR').format(rounded)} تومان`;
 }
 
 /**
- * Groups a plain amount with Persian digits (e.g. `۱۲۳٬۴۵۶`).
+ * Groups a plain integer amount with Persian digits (e.g. `۱۲۳٬۴۵۶`).
  *
  * Used for order totals, which carry no currency code of their own — the
- * storefront renders them with the Persian thousand separator. Decimals are
- * shown only when they exist, so round amounts read as `۲۴۱`.
+ * storefront renders them with the Persian thousand separator. Always
+ * truncated to an integer: Toman has no subunit.
  */
 export function formatNumberFa(value: number): string {
-  return new Intl.NumberFormat('fa-IR', { maximumFractionDigits: 2 }).format(
-    value,
+  return new Intl.NumberFormat('fa-IR', { maximumFractionDigits: 0 }).format(
+    Math.trunc(value),
   );
 }
 

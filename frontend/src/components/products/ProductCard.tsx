@@ -1,121 +1,128 @@
+'use client';
+
+import { useRef, useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { formatPriceFa } from '@/src/lib/format';
-import { resolveTheme, withAlpha } from '@/src/lib/theme';
+import ModelPreview from '@/src/components/3d/ModelPreview';
+import Badge from '@/src/components/ui/Badge';
+import Price from '@/src/components/ui/Price';
+import { resolveTheme } from '@/src/lib/theme';
+import { useCartStore } from '@/src/store/useCartStore';
 import type { Product } from '@/src/types/product';
 
-interface ProductCardProps {
-  product: Product;
-}
-
 /**
- * Storefront grid tile.
+ * Catalog card, shared by the home rails, category grids and search results.
  *
- * Server component: everything here is a link or CSS, so the card ships no
- * client JavaScript. Colours come from the product's category `theme_config`,
- * while the price is rendered in fa-IR (see src/lib/format.ts).
+ * The 3D preview is opt-in: it mounts a small canvas only while the pointer is
+ * over the card on a hover-capable device (after a short intent delay), or after
+ * an explicit tap on the "3D" toggle on touch. A grid therefore never boots more
+ * than the one canvas the user is actually looking at.
  */
-export default function ProductCard({ product }: ProductCardProps) {
+export default function ProductCard({ product }: { product: Product }) {
+  const addItem = useCartStore((state) => state.addItem);
   const theme = resolveTheme(product.category?.theme_config);
-  const thumbnail = product.media_3d?.thumbnail_url ?? null;
+
+  const poster = product.media_3d?.thumbnail_url ?? null;
+  const modelUrl = product.media_3d?.url ?? null;
   const inStock = product.stock > 0;
-  const wasPrice =
-    typeof product.compare_at_price === 'number' &&
-    product.compare_at_price > product.price
-      ? product.compare_at_price
-      : null;
+
+  const [preview, setPreview] = useState(false);
+  const [added, setAdded] = useState(false);
+  const hoverTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const startPreview = () => {
+    if (!modelUrl) return;
+    hoverTimer.current = setTimeout(() => setPreview(true), 180);
+  };
+
+  const stopPreview = () => {
+    if (hoverTimer.current) clearTimeout(hoverTimer.current);
+    setPreview(false);
+  };
+
+  const quickAdd = () => {
+    addItem(product, 1);
+    setAdded(true);
+  };
 
   return (
-    <Link
-      href={`/products/${product.slug}`}
-      aria-label={`View ${product.name}`}
-      className="group flex flex-col overflow-hidden rounded-3xl border bg-white/5 shadow-block transition duration-300 hover:-translate-y-1 hover:bg-white/10"
-      style={{ borderColor: withAlpha(theme.glow, 0.25) }}
-    >
+    <article className="group relative flex flex-col overflow-hidden rounded-lg bg-surface shadow-card transition duration-300 hover:-translate-y-1 hover:shadow-pop">
       <div
-        className="relative aspect-square w-full overflow-hidden"
-        style={{
-          background: `radial-gradient(70% 70% at 50% 30%, ${withAlpha(
-            theme.glow,
-            0.28,
-          )}, ${theme.background})`,
-        }}
+        className="relative aspect-square bg-cream-100"
+        onMouseEnter={startPreview}
+        onMouseLeave={stopPreview}
       >
-        {thumbnail ? (
-          <Image
-            src={thumbnail}
-            alt={product.media_3d?.alt_text ?? product.name}
-            fill
-            sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
-            className="object-cover transition duration-500 group-hover:scale-105"
-          />
-        ) : (
-          // No thumbnail uploaded yet: keep the tile on-brand instead of
-          // showing a broken image.
-          <div className="flex h-full w-full items-center justify-center">
-            <span
-              className="font-mono text-4xl font-black tracking-widest"
-              style={{ color: withAlpha(theme.primary, 0.55) }}
-            >
-              3D
+        <Link href={`/products/${product.slug}`} aria-label={product.title}>
+          {poster ? (
+            <Image
+              src={poster}
+              alt={product.media_3d?.alt_text ?? product.title}
+              fill
+              sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
+              className={`object-cover transition-opacity duration-300 ${
+                preview ? 'opacity-0' : 'opacity-100'
+              }`}
+            />
+          ) : (
+            <span className="grid h-full w-full place-items-center text-3xl">
+              🧸
             </span>
-          </div>
+          )}
+        </Link>
+
+        {preview && modelUrl && (
+          <ModelPreview modelUrl={modelUrl} className="absolute inset-0" />
         )}
 
-        {product.category && (
-          <span
-            className="absolute start-3 top-3 rounded-full border px-3 py-1 text-xs font-bold uppercase tracking-widest backdrop-blur"
-            style={{
-              backgroundColor: withAlpha(theme.primary, 0.22),
-              borderColor: withAlpha(theme.primary, 0.45),
-              color: theme.primary,
-            }}
+        {modelUrl && (
+          <button
+            type="button"
+            onClick={() => setPreview((value) => !value)}
+            aria-pressed={preview}
+            aria-label={preview ? 'بستن نمای سه‌بعدی' : 'نمایش سه‌بعدی'}
+            className="absolute top-2 end-2 rounded-full bg-surface/90 px-2.5 py-1 text-[11px] font-bold text-ink/80 shadow-card backdrop-blur transition hover:bg-surface"
           >
-            {product.category.name}
-          </span>
+            ۳D
+          </button>
         )}
 
         {!inStock && (
-          <span className="absolute end-3 top-3 rounded-full bg-brick-500/90 px-3 py-1 text-xs font-bold text-white">
-            Sold out
+          <span className="absolute top-2 start-2 rounded-full bg-ink/80 px-2.5 py-1 text-[11px] font-bold text-cream-50">
+            ناموجود
           </span>
         )}
       </div>
 
-      <div className="flex flex-1 flex-col gap-3 p-4">
+      <div className="flex flex-1 flex-col gap-2 p-4">
+        {product.category && (
+          <Badge color={theme.primary}>{product.category.name}</Badge>
+        )}
+
         <h3 className="line-clamp-2 text-base font-bold leading-snug">
-          {product.name}
+          <Link href={`/products/${product.slug}`} className="hover:underline">
+            {product.title}
+          </Link>
         </h3>
 
-        <p className="mt-auto flex items-baseline gap-2">
-          <span
-            className="text-lg font-black"
-            style={{ color: theme.primary }}
-          >
-            {formatPriceFa(product.price, product.currency)}
-          </span>
-          {wasPrice !== null && (
-            <span className="text-xs text-white/40 line-through">
-              {formatPriceFa(wasPrice, product.currency)}
-            </span>
-          )}
-        </p>
+        <div className="mt-auto flex items-center justify-between gap-2">
+          <Price
+            value={product.price}
+            wasValue={product.compare_at_price ?? null}
+            size="md"
+            accentColor={theme.primary}
+          />
 
-        {/*
-          The whole card is the link, so this is a styled span rather than a
-          nested <button> — interactive elements inside an anchor are invalid
-          HTML and break keyboard navigation.
-        */}
-        <span
-          className="inline-flex w-full items-center justify-center rounded-xl px-4 py-2 text-sm font-bold text-white transition group-hover:brightness-110"
-          style={{
-            backgroundColor: theme.primary,
-            boxShadow: `0 10px 24px -14px ${withAlpha(theme.glow, 0.95)}`,
-          }}
-        >
-          View in 3D
-        </span>
+          <button
+            type="button"
+            onClick={quickAdd}
+            disabled={!inStock}
+            aria-label={`افزودن ${product.title} به سبد خرید`}
+            className="rounded-md border border-ink/15 bg-cream-50 px-3 py-2 text-xs font-bold text-ink/80 transition hover:bg-cream-100 disabled:opacity-40"
+          >
+            {added ? '✓' : 'افزودن'}
+          </button>
+        </div>
       </div>
-    </Link>
+    </article>
   );
 }

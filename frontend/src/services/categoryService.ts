@@ -15,6 +15,7 @@ import {
  */
 const REVALIDATE_SECONDS = 30;
 
+
 /**
  * Fetches every category, each carrying its `theme_config`.
  *
@@ -38,4 +39,19 @@ export async function getAllCategories(): Promise<Category[]> {
   >;
 
   return unwrapCollection(payload?.data);
+}
+
+/**
+ * One category by slug, or null.
+ *
+ * The API exposes only the category collection (see backend/routes/api.php), so
+ * this filters the cached list rather than inventing an endpoint. The list is
+ * tiny and served from the same 30-second cache as {@link getAllCategories}.
+ */
+export async function getCategoryBySlug(
+  slug: string,
+): Promise<Category | null> {
+  const categories = await getAllCategories();
+
+  return categories.find((category) => category.slug === slug) ?? null;
 }

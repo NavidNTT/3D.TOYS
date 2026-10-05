@@ -1,17 +1,93 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import 'tailwindcss';
 
-:root {
-  --background: #0b1020;
-  --foreground: #f7f9fc;
+/**
+ * Toy Store — design tokens (Tailwind v4 `@theme`).
+ *
+ * LIGHT & WARM. Base is warm cream (#FAF6EF family), surfaces are white with a
+ * soft warm shadow. No dark/neon anywhere. Category accents arrive at runtime
+ * from the backend `theme_config` and are applied as inline styles / CSS vars
+ * (see src/lib/theme.ts) — Tailwind cannot compile runtime colours, so static
+ * tokens live here and dynamic accents live there.
+ *
+ * Scale discipline: spacing follows the 4px grid via Tailwind's default scale
+ * (no custom spacing tokens), radii and shadows come only from the tokens
+ * below, and z-index uses the three named layers.
+ */
+
+@theme {
+  /* Surfaces */
+  --color-cream-50: #faf6ef;
+  --color-cream-100: #f5eddd;
+  --color-cream-200: #eadfc8;
+  --color-surface: #ffffff;
+  --color-ink: #292524;
+
+  /* Brand accents (static; category accents are runtime data) */
+  --color-brand-50: #fef3ec;
+  --color-brand-100: #fde4d3;
+  --color-brand-500: #e8622c;
+  --color-brand-600: #cf4f1e;
+  --color-brand-700: #a93d15;
+  --color-sky-soft-500: #0ea5e9;
+
+  /* Type — wired to next/font variables in layout.tsx */
+  --font-body: var(--font-vazirmatn), 'Vazirmatn', ui-sans-serif, system-ui,
+    sans-serif;
+  --font-display: var(--font-lalezar), 'Lalezar', 'Vazirmatn', ui-sans-serif,
+    system-ui, sans-serif;
+
+  /* Playful but strict radii (no magic numbers in components) */
+  --radius-sm: 0.5rem;
+  --radius-md: 0.75rem;
+  --radius-lg: 1.25rem;
+  --radius-xl: 1.75rem;
+  --radius-full: 9999px;
+
+  /* Warm shadows */
+  --shadow-card: 0 1px 2px rgb(120 90 40 / 0.06), 0 8px 24px -12px rgb(120 90 40 / 0.18);
+  --shadow-pop: 0 2px 4px rgb(120 90 40 / 0.08), 0 16px 40px -16px rgb(120 90 40 / 0.28);
+
+  /* Named z-index layers */
+  --z-header: 30;
+  --z-drawer: 40;
+  --z-toast: 50;
+
+  /* Animations */
+  --animate-drag-hint: drag-hint 2.2s ease-in-out infinite;
+}
+
+/* First-visit "بکش و بچرخان" nudge: a small side-to-side motion. */
+@keyframes drag-hint {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  30% {
+    transform: translateX(-8px);
+  }
+  60% {
+    transform: translateX(8px);
+  }
+}
+
+html {
+  background-color: var(--color-cream-50);
 }
 
 body {
-  background:
-    radial-gradient(1000px 600px at 15% -10%, rgba(56, 189, 248, 0.18), transparent 60%),
-    radial-gradient(900px 500px at 90% 10%, rgba(242, 101, 90, 0.18), transparent 60%),
-    var(--background);
-  color: var(--foreground);
+  background-color: var(--color-cream-50);
+  color: var(--color-ink);
   min-height: 100vh;
+}
+
+/* Prices and quantities always render in Persian digits. */
+.tnum {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Respect the OS "reduce motion" setting: no looping affordance animation. */
+@media (prefers-reduced-motion: reduce) {
+  .animate-drag-hint {
+    animation: none;
+  }
 }

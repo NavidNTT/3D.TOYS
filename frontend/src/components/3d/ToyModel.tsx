@@ -1,110 +1,90 @@
 'use client';
 
+import { useEffect } from 'react';
+import * as THREE from 'three';
 import { Center, useGLTF } from '@react-three/drei';
 
 /**
  * Local DRACOLoader path.
  *
- * `public/draco/` holds the official Draco decoders shipped with `three`
- * (copied from `node_modules/three/examples/jsm/libs/draco/`). drei defaults
- * to Google's CDN (`https://www.gstatic.com/draco/versioned/decoders/1.5.5/`),
- * which we do not want: a blocked CDN would break every Draco-compressed
- * model. Serving from our own origin also avoids CORS errors.
+ * `public/draco/` holds the official Draco decoders shipped with `three`. drei
+ * defaults to Google's CDN, which we do not want: a blocked CDN would break
+ * every Draco-compressed model. Serving from our own origin also avoids CORS.
  */
 export const DRACO_PATH = '/draco/';
 
-/** Backwards-compatible alias (existing imports use this name). */
-export const DRACO_DECODER_PATH = DRACO_PATH;
-
 /**
- * `false` attaches no DRACOLoader at all — used as the recovery step when a
- * model cannot be decoded, and for deployments that only ever serve plain
- * (uncompressed) `.glb` / `.gltf` files.
+ * `false` attaches no DRACOLoader at all — the recovery step when a model
+ * cannot be decoded, and the correct setting for plain, uncompressed `.glb`.
  */
 export type DracoDecoderPath = string | false;
 
-/**
- * Make the local decoder the app-wide default, so any other `useGLTF(url)`
- * call (and every preload) resolves the decoder from our own origin too.
- */
 useGLTF.setDecoderPath(DRACO_PATH);
 
-function ToyModelWithDraco({ modelUrl }: { modelUrl: string }) {
-  const { scene } = useGLTF(modelUrl, DRACO_PATH);
-
-  return (
-    <Center top>
-      <primitive object={scene} />
-    </Center>
-  );
+export interface ModelBounds {
+  /** Half of the largest bounding-box dimension, in model units. */
+  radius: number;
 }
 
-function ToyModelWithoutDraco({ modelUrl }: { modelUrl: string }) {
-  const { scene } = useGLTF(modelUrl, false);
+interface ToyModelProps {
+  modelUrl: string;
+  dracoDecoderPath?: DracoDecoderPath;
+  /** Reports the model's size so the camera can frame it. */
+  onReady?: (bounds: ModelBounds) => void;
+}
+
+/**
+ * Loads a .glb/.gltf and centers it.
+ *
+ * `Center` normalizes the origin so models with arbitrary offsets still sit
+ * correctly in frame. The bounding box is measured after mounting and reported
+ * through `onReady`, which is what lets the quick-view buttons and the initial
+ * camera framing adapt to models of very different scale (a 1 cm bolt vs a
+ * 1 m toy car) instead of assuming a fixed distance.
+ */
+export default function ToyModel({
+  modelUrl,
+  dracoDecoderPath = DRACO_PATH,
+  onReady,
+}: ToyModelProps) {
+  const { scene } = useGLTF(
+    modelUrl,
+    dracoDecoderPath === false ? false : DRACO_PATH,
+  );
+
+  useEffect(() => {
+    const box = new THREE.Box3().setFromObject(scene);
+    const size = new THREE.Vector3();
+    box.getSize(size);
+
+    const radius = Math.max(size.x, size.y, size.z) / 2;
+
+    onReady?.({ radius: Number.isFinite(radius) && radius > 0 ? radius : 1 });
+  }, [scene, onReady]);
 
   return (
-    <Center top>
+    <Center>
       <primitive object={scene} />
     </Center>
   );
 }
 
 /**
- * Warm the loader cache for a model without rendering it (e.g. on hover or on
- * a product listing). Uses the same decoder path as `ToyModel`, otherwise the
- * preloaded entry — react-three-fiber caches by `[loader, url]` — would be
- * built with a different decoder configuration.
+ * Warm the loader cache without rendering the model (hover / listing previews).
+ * Uses the same decoder configuration as {@link ToyModel}, otherwise r3f — which
+ * keys assets by `[loader, url]` — would cache a second, differently-decoded
+ * entry for the same file.
  */
-export function preloadToyModel(
-  modelUrl: string,
-  dracoDecoderPath: DracoDecoderPath = DRACO_PATH,
-): void {
-  if (dracoDecoderPath === false) {
-    useGLTF.preload(modelUrl, false);
-    return;
-  }
+export function preloadToyModel(modelUrl: string): void {
   useGLTF.preload(modelUrl, DRACO_PATH);
 }
 
 /**
  * Forget the cached (possibly rejected) load for a URL.
  *
- * r3f keys assets by `[loader, url]` only, so a failed Draco decode stays
- * cached and would re-throw instantly; a retry must clear the entry first.
+ * r3f keys assets by `[loader, url]` only, so a failed Draco decode stays cached
+ * and re-throws instantly; a retry must clear the entry first.
  */
 export function clearToyModelCache(modelUrl: string): void {
   useGLTF.clear(modelUrl);
 }
-
-interface ToyModelProps {
-  modelUrl: string;
-  /**
-   * Local decoder path (default) or `false` to load without a DRACOLoader.
-   * Plain, uncompressed `.glb` files never touch the decoder either way: the
-   * GLTFLoader only invokes it for models that use
-   * `KHR_draco_mesh_compression`, so both variants share this code path.
-   */
-  dracoDecoderPath?: DracoDecoderPath;
-}
-
-/**
- * Loads a .glb/.gltf model and centers it. `Center top` normalizes
- * position so models with arbitrary origins/offsets still sit
- * correctly on the Stage floor.
- *
- * Both the original (uncompressed `.glb`) and the Draco-compressed
- * `_opt.glb` variants load through `ProductViewer3D` from the local
- * `/draco/` decoders with no CDN or CORS errors.
- */
-export default function ToyModel({
-  modelUrl,
-  dracoDecoderPath = DRACO_PATH,
-}: ToyModelProps) {
-  if (dracoDecoderPath === false) {
-    return <ToyModelWithoutDraco modelUrl={modelUrl} />;
-  }
-
-  return <ToyModelWithDraco modelUrl={modelUrl} />;
-}
-
-

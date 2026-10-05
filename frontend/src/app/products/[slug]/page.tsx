@@ -1,216 +1,235 @@
 import type { Metadata } from 'next';
+import Image from 'next/image';
+import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import ProductViewer3D, {
-  type CameraSettings,
-} from '@/src/components/3d/ProductViewer3D';
-import AddToCartButton from '@/src/components/products/AddToCartButton';
-import { formatPriceFa } from '@/src/lib/format';
-import { resolveTheme, withAlpha } from '@/src/lib/theme';
+import ProductViewer3D from '@/src/components/3d/ProductViewer3D';
+import ProductPurchasePanel from '@/src/components/products/ProductPurchasePanel';
+import Badge from '@/src/components/ui/Badge';
+import Breadcrumbs from '@/src/components/ui/Breadcrumbs';
+import Card from '@/src/components/ui/Card';
+import Container from '@/src/components/ui/Container';
+import Price from '@/src/components/ui/Price';
+import { resolveTheme } from '@/src/lib/theme';
 import { getProductBySlug } from '@/src/services/productService';
 import {
   toAttributeEntries,
-  type LightingPreset,
-  type Media3DCameraSettings,
+  type Product,
+  type ProductAttributeValue,
 } from '@/src/types/product';
 
-interface ProductPageProps {
-  params: { slug: string };
-}
+/**
+ * Product detail page (RTL, light warm theme).
+ *
+ * Rendered per request (`force-dynamic`): stock and price must never be served
+ * from a full-page cache, and the catalog API is unreachable while the Docker
+ * image builds. Caching still happens one layer down — the product service
+ * fetches with `revalidate: 30`, so Laravel is not hammered per visitor.
+ *
+ * Dynamic route params are a Promise in Next 16 and must be awaited.
+ */
+export const dynamic = 'force-dynamic';
 
-/** Maps the API's snake_case framing onto the viewer's prop names. */
-function toCameraSettings(
-  settings?: Media3DCameraSettings | null,
-): CameraSettings | undefined {
-  if (!settings) return undefined;
-
-  return {
-    position: settings.position,
-    fov: settings.fov,
-    minDistance: settings.min_distance,
-    maxDistance: settings.max_distance,
-    autoRotateSpeed: settings.auto_rotate_speed,
-  };
-}
+type ProductPageProps = { params: Promise<{ slug: string }> };
 
 export async function generateMetadata({
   params,
 }: ProductPageProps): Promise<Metadata> {
-  const product = await getProductBySlug(params.slug);
+  const { slug } = await params;
+  const product = await getProductBySlug(slug);
 
   if (!product) {
-    return { title: 'Product not found | Toy Store' };
+    return { title: 'محصول یافت نشد | Toy Store' };
   }
 
-  const title = `${product.name} | Toy Store`;
   const description =
     product.description?.slice(0, 160) ??
-    `${product.name} — spin it in 3D before you buy.`;
+    `${product.title} — پیش‌نمایش سه‌بعدی و خرید آنلاین از Toy Store.`;
+  const poster = product.media_3d?.thumbnail_url ?? null;
 
   return {
-    title,
+    title: `${product.title} | Toy Store`,
     description,
     alternates: { canonical: `/products/${product.slug}` },
     openGraph: {
-      title,
+      title: product.title,
       description,
       type: 'website',
-      url: `/products/${product.slug}`,
-      images: product.media_3d?.thumbnail_url
-        ? [{ url: product.media_3d.thumbnail_url }]
-        : undefined,
+      locale: 'fa_IR',
+      images: poster ? [{ url: poster, alt: product.title }] : undefined,
     },
   };
 }
 
+/**
+ * Pulls the size hint out of the attributes when the owner supplied one.
+ *
+ * No invented numbers: with no size attribute the page says so and points at
+ * the description instead of guessing a dimension.
+ */
+function findSizeAttribute(
+  entries: Array<[string, ProductAttributeValue]>,
+): string | null {
+  const match = entries.find(([key]) =>
+    /(ابعاد|اندازه|size|dimension)/i.test(key),
+  );
+
+  return match ? String(match[1]) : null;
+}
+
 export default async function ProductPage({ params }: ProductPageProps) {
-  const product = await getProductBySlug(params.slug);
+  const { slug } = await params;
+  const product = await getProductBySlug(slug);
 
   if (!product) {
     notFound();
   }
 
   const theme = resolveTheme(product.category?.theme_config);
+  const poster = product.media_3d?.thumbnail_url ?? null;
   const attributes = toAttributeEntries(product.attributes);
-  const media = product.media_3d;
-  const inStock = product.stock > 0;
-  const wasPrice =
-    typeof product.compare_at_price === 'number' &&
-    product.compare_at_price > product.price
-      ? product.compare_at_price
-      : null;
+  const size = findSizeAttribute(attributes);
 
   return (
-    <main className="relative mx-auto flex max-w-6xl flex-col gap-10 px-6 py-12 lg:flex-row">
-      {/* Ambient halo tinted with the category's glow_color. */}
-      <div
-        aria-hidden
-        className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-[420px]"
-        style={{
-          background: `radial-gradient(60% 100% at 50% 0%, ${withAlpha(
-            theme.glow,
-            0.3,
-          )}, transparent 70%)`,
-        }}
+    <Container className="py-8">
+      <Breadcrumbs
+        items={[
+          ...(product.category
+            ? [
+                {
+                  label: product.category.name,
+                  href: `/categories/${product.category.slug}`,
+                },
+              ]
+            : []),
+          { label: product.title },
+        ]}
       />
 
-      <div className="w-full lg:w-1/2">
-        {media ? (
-          <div
-            className="rounded-3xl"
-            style={{ boxShadow: `0 0 90px -30px ${withAlpha(theme.glow, 0.95)}` }}
-          >
-            <ProductViewer3D
-              modelUrl={media.url}
-              themeColor={theme.background}
-              lightingPreset={(media.lighting_preset ??
-                'studio') as LightingPreset}
-              cameraSettings={toCameraSettings(media.camera_settings)}
-            />
-          </div>
-        ) : (
-          <div className="flex aspect-square max-h-[500px] w-full items-center justify-center rounded-3xl border border-white/10 bg-white/5 px-6 text-center text-sm text-white/50">
-            No 3D preview for this toy yet.
-          </div>
-        )}
-        {media && (
-          <p className="mt-3 text-center font-mono text-xs text-white/40">
-            Drag to rotate · Scroll / pinch to zoom
-          </p>
-        )}
-      </div>
+      <div className="mt-6 grid gap-8 lg:grid-cols-2">
+        <ProductMedia
+          product={product}
+          poster={poster}
+          accentColor={theme.primary}
+        />
 
-      <section className="flex w-full flex-col gap-6 lg:w-1/2">
-        <div className="space-y-3">
-          <div className="flex flex-wrap items-center gap-2">
-            {product.category && (
-              <span
-                className="rounded-full border px-3 py-1 text-xs font-bold uppercase tracking-widest"
-                style={{
-                  backgroundColor: withAlpha(theme.primary, 0.15),
-                  borderColor: withAlpha(theme.primary, 0.4),
-                  color: theme.primary,
-                }}
-              >
-                {product.category.name}
-              </span>
-            )}
-            <span
-              className={`rounded-full px-3 py-1 text-xs font-bold ${
-                inStock
-                  ? 'bg-emerald-400/15 text-emerald-300'
-                  : 'bg-brick-500/20 text-brick-400'
-              }`}
-            >
-              {inStock ? `In stock · ${product.stock}` : 'Out of stock'}
-            </span>
-          </div>
+        <div className="space-y-6">
+          {product.category && (
+            <Badge color={theme.primary}>{product.category.name}</Badge>
+          )}
 
-          <h1 className="text-3xl font-black leading-tight sm:text-4xl">
-            {product.name}
+          <h1 className="font-display text-3xl leading-tight text-ink sm:text-4xl">
+            {product.title}
           </h1>
 
-          <p className="flex items-baseline gap-3">
-            <span
-              className="text-2xl font-bold"
-              style={{ color: theme.primary }}
-            >
-              {formatPriceFa(product.price, product.currency)}
-            </span>
-            {wasPrice !== null && (
-              <span className="text-sm text-white/40 line-through">
-                {formatPriceFa(wasPrice, product.currency)}
-              </span>
-            )}
-          </p>
-        </div>
+          <Price
+            value={product.price}
+            wasValue={product.compare_at_price ?? null}
+            size="lg"
+            accentColor={theme.primary}
+          />
 
-        {product.description && (
-          <p className="text-base text-white/70">{product.description}</p>
-        )}
+          {product.description && (
+            <p className="text-sm leading-7 text-ink/70">
+              {product.description}
+            </p>
+          )}
 
-        {attributes.length > 0 && (
-          <div>
-            <h2 className="text-sm font-semibold uppercase tracking-[0.2em] text-white/50">
-              Specifications
-            </h2>
-            <dl className="mt-3 grid grid-cols-2 gap-3">
-              {attributes.map(([label, value]) => (
-                <div
-                  key={label}
-                  className="rounded-2xl border bg-white/5 p-4"
-                  style={{ borderColor: withAlpha(theme.glow, 0.25) }}
-                >
-                  <dt className="text-xs uppercase tracking-widest text-white/50">
-                    {label}
-                  </dt>
-                  <dd className="mt-1 text-sm font-semibold">
-                    {typeof value === 'boolean' ? (value ? 'Yes' : 'No') : value}
+          <ProductPurchasePanel product={product} />
+
+          <Card className="space-y-3 p-5">
+            <h2 className="font-display text-lg text-ink">مشخصات</h2>
+            <dl className="grid gap-2 text-sm">
+              <div className="flex justify-between gap-4">
+                <dt className="text-ink/60">ابعاد</dt>
+                <dd className="font-bold text-ink">
+                  {size ?? 'ابعاد در توضیحات'}
+                </dd>
+              </div>
+              {attributes.map(([key, value]) => (
+                <div key={key} className="flex justify-between gap-4">
+                  <dt className="text-ink/60">{key}</dt>
+                  <dd className="font-bold text-ink">
+                    {typeof value === 'boolean'
+                      ? value
+                        ? 'دارد'
+                        : 'ندارد'
+                      : String(value)}
                   </dd>
                 </div>
               ))}
             </dl>
-          </div>
-        )}
+          </Card>
 
-        <div className="flex gap-3">
-          <AddToCartButton
-            product={product}
-            primaryColor={theme.primary}
-            glowColor={theme.glow}
-            disabled={!inStock}
-          />
-          <button
-            type="button"
-            className="rounded-xl border bg-white/5 px-4 py-3 font-bold text-white/80 transition hover:bg-white/10"
-            style={{
-              borderColor: withAlpha(theme.accent, 0.5),
-              color: theme.accent,
-            }}
+          <Link
+            href="/categories"
+            className="inline-block text-sm font-bold text-brand-600 hover:underline"
           >
-            Wishlist
-          </button>
+            مشاهده سایر دسته‌بندی‌ها
+          </Link>
         </div>
-      </section>
-    </main>
+      </div>
+    </Container>
   );
 }
+
+/**
+ * Viewer + image gallery column (right column in RTL flow).
+ *
+ * The 3D viewer is only rendered when the product actually has a model; the
+ * image gallery shows whatever the API provides. `hotspots` are intentionally
+ * not passed yet — no product carries spatial annotation data, and rendering
+ * invented callouts would be worse than none.
+ */
+function ProductMedia({
+  product,
+  poster,
+  accentColor,
+}: {
+  product: Product;
+  poster: string | null;
+  accentColor: string;
+}) {
+  const modelUrl = product.media_3d?.url ?? null;
+
+  return (
+    <div className="space-y-3">
+      {modelUrl ? (
+        <ProductViewer3D
+          modelUrl={modelUrl}
+          posterUrl={poster}
+          alt={product.media_3d?.alt_text ?? product.title}
+          accentColor={accentColor}
+        />
+      ) : poster ? (
+        <div className="relative aspect-square overflow-hidden rounded-xl bg-cream-100">
+          <Image
+            src={poster}
+            alt={product.title}
+            fill
+            sizes="(max-width: 1024px) 100vw, 50vw"
+            className="object-cover"
+          />
+        </div>
+      ) : (
+        <div className="grid aspect-square place-items-center rounded-xl bg-cream-100 text-sm text-ink/50">
+          تصویری برای این محصول ثبت نشده است.
+        </div>
+      )}
+
+      {poster && modelUrl && (
+        <div className="flex gap-2" aria-label="گالری تصاویر">
+          <div className="relative h-20 w-20 overflow-hidden rounded-md border border-ink/15 bg-surface">
+            <Image
+              src={poster}
+              alt={`تصویر ${product.title}`}
+              fill
+              sizes="80px"
+              className="object-cover"
+            />
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+

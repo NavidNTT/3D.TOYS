@@ -16,12 +16,15 @@ export interface ResolvedTheme {
   background: string;
 }
 
-/** Storefront defaults, used whenever a category ships without theming. */
+/**
+ * Storefront defaults for the light warm theme (see globals.css tokens).
+ * Used whenever a category ships without theming.
+ */
 export const FALLBACK_THEME: ResolvedTheme = {
-  primary: '#38bdf8', // sky-400
-  glow: '#0ea5e9', // sky-500
-  accent: '#ffc72c', // sunbeam-400
-  background: '#0b1020', // midnight blue, matches --background
+  primary: '#c2410c', // terracotta-700
+  glow: '#ea580c', // terracotta-600
+  accent: '#b45309', // honey-700
+  background: '#faf6ef', // cream-50, matches --color-cream-50
 };
 
 export function resolveTheme(theme?: CategoryTheme | null): ResolvedTheme {
