@@ -40,3 +40,14 @@ export function formatDateFa(value: string | Date | null | undefined): string {
 
   return new Intl.DateTimeFormat('fa-IR', { dateStyle: 'medium' }).format(date);
 }
+
+/**
+ * Converts ASCII digits inside a string to Persian digits.
+ *
+ * Used for order numbers (`TS-1042` → `TS-۱۰۴۲`) and any other code the
+ * storefront shows: the digits are data, but Persian is the presentation
+ * language, so they are rendered in the same script as the surrounding copy.
+ */
+export function toPersianDigits(value: string): string {
+  return value.replace(/[0-9]/g, (digit) => '۰۱۲۳۴۵۶۷۸۹'[Number(digit)]);
+}

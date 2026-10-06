@@ -2,6 +2,7 @@ import localFont from 'next/font/local';
 import type { Metadata } from 'next';
 import Footer from '@/src/components/layout/Footer';
 import Header from '@/src/components/layout/Header';
+import SearchPalette from '@/src/components/search/SearchPalette';
 import './globals.css';
 
 /**

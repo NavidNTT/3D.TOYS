@@ -94,18 +94,3 @@ export async function getProducts(
 
   return { items: unwrapCollection(data), meta: null };
 }
-
-/**
- * Fetches the storefront's product listing (GET /api/v1/products).
- *
- * Rows only — for callers that do not render pagination (homepage rails).
- * Paging callers should use {@link getProducts} instead.
- *
- * @throws Error when the catalog cannot be read — an empty grid would be
- *         indistinguishable from "the shop is empty".
- */
-export async function getAllProducts(): Promise<Product[]> {
-  const { items } = await getProducts();
-
-  return items;
-}

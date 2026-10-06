@@ -7,6 +7,30 @@
  * the current catalog.
  */
 
+/** One line of a checkout request: identity + quantity only, never a price. */
+export interface CheckoutItem {
+  product_id: number;
+  quantity: number;
+}
+
+/**
+ * The payload the checkout form posts.
+ *
+ * Deliberately carries no price, line total or grand total: `CheckoutRequest`
+ * accepts only identities and quantities, and `OrderService` reads the amounts
+ * from the locked product rows. Mirrors backend CheckoutRequest's rules.
+ */
+export interface CheckoutPayload {
+  receiver_name: string;
+  receiver_phone: string;
+  province: string;
+  city: string;
+  address: string;
+  postal_code: string;
+  notes?: string | null;
+  items: CheckoutItem[];
+}
+
 /** Lifecycle states, exactly as `App\Enums\OrderStatus` backs them. */
 export type OrderStatus =
   | 'pending'
