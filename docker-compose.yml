@@ -370,12 +370,17 @@ services:
     # Bootstrap dependencies on first run, then hand over to `next dev`.
     # Docker Desktop on Windows/macOS does not forward inotify events from
     # bind mounts reliably, hence the polling flags (Webpack + Chokidar).
+    # NOTE: the named volume `nextjs_node_modules` persists across restarts,
+    # so the `[ ! -x ... ]` guard goes stale whenever package.json changes.
+    # It must check the actual dependency tree (npm ls), otherwise a new dep
+    # like @tailwindcss/postcss is never installed and Next fails with
+    # "Cannot find module '@tailwindcss/postcss'".
     command:
       - sh
       - -c
       - >
-        if [ ! -x node_modules/.bin/next ]; then
-          echo '→ installing frontend dependencies (first run only)…';
+        if [ ! -x node_modules/.bin/next ] || ! npm ls @tailwindcss/postcss next react react-dom three --omit=dev >/dev/null 2>&1; then
+          echo '→ installing frontend dependencies…';
           npm install --no-audit --no-fund;
         fi;
         exec npm run dev -- --hostname 0.0.0.0 --port 3000
