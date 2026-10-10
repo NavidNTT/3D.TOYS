@@ -4,7 +4,6 @@ import { Suspense, useRef } from 'react';
 import { Canvas, useFrame } from '@react-three/fiber';
 import type { Group } from 'three';
 import ToyModel from './ToyModel';
-import ViewerLoader from './ViewerLoader';
 
 /**
  * Very light rotating model preview for hover/tap states (product cards).
@@ -43,7 +42,11 @@ export default function ModelPreview({
       <ambientLight intensity={0.9} />
       <directionalLight position={[3, 5, 4]} intensity={1.5} />
       <directionalLight position={[-4, 2, -3]} intensity={0.5} />
-      <Suspense fallback={<ViewerLoader />}>
+      {/* No in-canvas fallback: a drei `<Html>` root mounted as a Suspense
+          fallback is torn down synchronously while React renders (see
+          ViewerLoader). This is a hover teaser over the card's poster, which
+          is already the visual placeholder, so nothing is lost. */}
+      <Suspense fallback={null}>
         <Spin>
           <ToyModel modelUrl={modelUrl} />
         </Spin>

@@ -43,6 +43,8 @@ export type OrderStatus =
 export interface OrderItem {
   product_id: number | null;
   product_title: string;
+  /** The line's unit. Always `'IRT'` for a real order; carried, not assumed. */
+  currency?: string | null;
   unit_price: number;
   quantity: number;
   total_price: number;
@@ -55,6 +57,8 @@ export interface Order {
   /** Persian label from the enum; optional so the client can fall back. */
   status_label?: string;
   total_amount: number;
+  /** The invoice's unit, so the formatter never has to guess it. */
+  currency?: string | null;
 
   /** Shipping snapshot, exactly as it was entered for this order. */
   receiver_name: string;

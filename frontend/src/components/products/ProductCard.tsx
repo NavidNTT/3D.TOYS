@@ -8,7 +8,7 @@ import Badge from '@/src/components/ui/Badge';
 import Price from '@/src/components/ui/Price';
 import { resolveTheme } from '@/src/lib/theme';
 import { useCartStore } from '@/src/store/useCartStore';
-import type { Product } from '@/src/types/product';
+import { isPurchasable, type Product } from '@/src/types/product';
 
 /**
  * Catalog card, shared by the home rails, category grids and search results.
@@ -25,6 +25,9 @@ export default function ProductCard({ product }: { product: Product }) {
   const poster = product.media_3d?.thumbnail_url ?? null;
   const modelUrl = product.media_3d?.url ?? null;
   const inStock = product.stock > 0;
+  // Distinct from `inStock`: the row exists and may be in stock, but has no
+  // toman amount yet, so it cannot be sold at any price.
+  const purchasable = isPurchasable(product);
 
   const [preview, setPreview] = useState(false);
   const [added, setAdded] = useState(false);
@@ -41,8 +44,9 @@ export default function ProductCard({ product }: { product: Product }) {
   };
 
   const quickAdd = () => {
-    addItem(product, 1);
-    setAdded(true);
+    // `addItem` refuses a product with no toman amount, so only claim success
+    // when the line really went into the cart.
+    setAdded(addItem(product, 1));
   };
 
   return (
@@ -86,11 +90,17 @@ export default function ProductCard({ product }: { product: Product }) {
           </button>
         )}
 
-        {!inStock && (
+        {/* A pricing problem outranks a stock one: a product with no toman
+            amount cannot be sold even when it is sitting on the shelf. */}
+        {!purchasable ? (
+          <span className="absolute top-2 start-2 rounded-full bg-amber-600/90 px-2.5 py-1 text-[11px] font-bold text-cream-50">
+            قیمت در حال بررسی
+          </span>
+        ) : !inStock ? (
           <span className="absolute top-2 start-2 rounded-full bg-ink/80 px-2.5 py-1 text-[11px] font-bold text-cream-50">
             ناموجود
           </span>
-        )}
+        ) : null}
       </div>
 
       <div className="flex flex-1 flex-col gap-2 p-4">
@@ -107,6 +117,7 @@ export default function ProductCard({ product }: { product: Product }) {
         <div className="mt-auto flex items-center justify-between gap-2">
           <Price
             value={product.price}
+            currency={product.currency}
             wasValue={product.compare_at_price ?? null}
             size="md"
             accentColor={theme.primary}
@@ -115,8 +126,11 @@ export default function ProductCard({ product }: { product: Product }) {
           <button
             type="button"
             onClick={quickAdd}
-            disabled={!inStock}
+            disabled={!inStock || !purchasable}
             aria-label={`افزودن ${product.title} به سبد خرید`}
+            title={
+              purchasable ? undefined : 'قیمت تومانی این محصول هنوز نهایی نشده است.'
+            }
             className="rounded-md border border-ink/15 bg-cream-50 px-3 py-2 text-xs font-bold text-ink/80 transition hover:bg-cream-100 disabled:opacity-40"
           >
             {added ? '✓' : 'افزودن'}

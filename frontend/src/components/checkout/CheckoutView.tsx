@@ -8,12 +8,14 @@ import Input from '@/src/components/ui/Input';
 import Price from '@/src/components/ui/Price';
 import Skeleton from '@/src/components/ui/Skeleton';
 import Textarea from '@/src/components/ui/Textarea';
+import { CURRENCY_IRT } from '@/src/lib/format';
 import {
   isValidIranianPhone,
   normalizePhone,
   normalizePostalCode,
 } from '@/src/lib/persian';
 import type { CartQuote } from '@/src/services/cartQuote';
+import { checkoutGate } from '@/src/services/checkoutGate';
 import type { SessionUser } from '@/src/lib/auth/session';
 import type { Order } from '@/src/types/order';
 
@@ -28,6 +30,14 @@ import type { Order } from '@/src/types/order';
  * intentional, clearly-labelled placeholder (see the render below) and
  * submitting only creates a `pending` order.
  */
+/**
+ * The domain error shown when the cart holds a line checkout must refuse.
+ * Failing closed beats silently submitting a subset of the cart: an order the
+ * customer never saw the full picture of is worse than no order at all.
+ */
+const BLOCKED_SUMMARY =
+  'برخی اقلام سبد خرید شما قیمت تومانی نهایی ندارند یا دیگر در دسترس نیستند. تا زمانی که این اقلام در سبد باشند، ثبت سفارش ممکن نیست.';
+
 export default function CheckoutView({ user }: { user: SessionUser }) {
   const router = useRouter();
 
@@ -117,6 +127,13 @@ export default function CheckoutView({ user }: { user: SessionUser }) {
 
     if (Object.keys(errors).length > 0 || quote === null) return;
 
+    // Fail closed: never submit a subset of the cart while an unorderable line
+    // is still in it — the render blocks the form, this guards the action.
+    if (checkoutGate(quote).blocked) {
+      setSubmitError(BLOCKED_SUMMARY);
+      return;
+    }
+
     setSubmitting(true);
 
     try {
@@ -204,6 +221,43 @@ export default function CheckoutView({ user }: { user: SessionUser }) {
         </div>
         <Skeleton className="h-64 w-full rounded-lg" />
       </div>
+    );
+  }
+
+  // Fail closed before anything else renders: if the quote refused to price a
+  // line the customer still has in the cart, checkout must stop with a clear
+  // domain-level error instead of quietly presenting a smaller cart as final.
+  const gate = quote === null ? null : checkoutGate(quote);
+
+  if (gate !== null && gate.blocked) {
+    const unorderable = [
+      ...gate.unavailableSlugs,
+      ...gate.missingIds.map((id) => `#${id}`),
+    ];
+
+    return (
+      <Card className="p-10 text-center">
+        <p className="text-4xl">⚠️</p>
+        <h1 className="mt-4 font-display text-2xl text-ink">
+          امکان ثبت سفارش نیست
+        </h1>
+        <p className="mt-2 text-sm font-bold text-red-700" role="alert">
+          {BLOCKED_SUMMARY}
+        </p>
+        <ul className="mx-auto mt-3 max-w-md space-y-1 text-sm text-ink/70">
+          {unorderable.map((entry) => (
+            <li key={entry} className="truncate" dir="auto">
+              {entry}
+            </li>
+          ))}
+        </ul>
+        <a
+          href="/cart"
+          className="mt-6 inline-block rounded-md bg-brand-500 px-5 py-3 text-sm font-bold text-white shadow-card transition hover:bg-brand-600"
+        >
+          بازگشت به سبد خرید
+        </a>
+      </Card>
     );
   }
 
@@ -352,14 +406,14 @@ export default function CheckoutView({ user }: { user: SessionUser }) {
                 <span className="line-clamp-1 text-ink/70">
                   {line.product.title} × {line.quantity}
                 </span>
-                <Price value={line.lineTotal} size="sm" />
+                <Price value={line.lineTotal} currency={CURRENCY_IRT} size="sm" />
               </li>
             ))}
           </ul>
 
           <div className="flex items-center justify-between border-t border-ink/10 pt-3">
             <span className="text-sm text-ink/60">جمع کل</span>
-            <Price value={quote.subtotal} size="lg" />
+            <Price value={quote.subtotal} currency={CURRENCY_IRT} size="lg" />
           </div>
 
           <Button

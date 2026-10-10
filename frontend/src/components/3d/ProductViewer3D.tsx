@@ -183,7 +183,10 @@ export default function ProductViewer3D({
           <directionalLight position={[4, 6, 5]} intensity={1.6} />
           <directionalLight position={[-5, 3, -4]} intensity={0.5} />
 
-          <Suspense fallback={<ViewerLoader />}>
+          {/* No Suspense fallback inside the canvas: see ViewerLoader for why a
+              drei `<Html>` root there is a React race. The loader is a DOM
+              overlay rendered below, over the canvas. */}
+          <Suspense fallback={null}>
             <ModelLoadBoundary
               modelUrl={modelUrl}
               dracoDecoderPath={dracoDecoderPath}
@@ -217,6 +220,10 @@ export default function ProductViewer3D({
           ))}
         </Canvas>
       )}
+
+      {/* Loading overlay: DOM, drawn above the canvas, gone the moment the
+          model reports ready. Rendered after the canvas so it stacks on top. */}
+      {inView && !failed && !modelReady && <ViewerLoader />}
 
       {failed && (
         <p

@@ -120,18 +120,31 @@ export default async function OrderDetailPage({ params }: OrderDetailProps) {
                     </p>
                     <p className="tnum mt-0.5 text-xs text-ink/50">
                       تعداد {item.quantity} ×{' '}
-                      <Price value={item.unit_price} size="sm" className="inline" />
+                      <Price
+                        value={item.unit_price}
+                        currency={item.currency}
+                        size="sm"
+                        className="inline"
+                      />
                     </p>
                   </div>
 
-                  <Price value={item.total_price} size="md" />
+                  <Price
+                    value={item.total_price}
+                    currency={item.currency}
+                    size="md"
+                  />
                 </li>
               ))}
             </ul>
 
             <div className="mt-4 flex items-center justify-between border-t border-ink/10 pt-4">
               <span className="text-sm font-bold text-ink/70">جمع کل</span>
-              <Price value={order.total_amount} size="lg" />
+              <Price
+                value={order.total_amount}
+                currency={order.currency}
+                size="lg"
+              />
             </div>
           </Card>
 

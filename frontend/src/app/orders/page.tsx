@@ -148,7 +148,11 @@ export default async function OrdersPage() {
 
                   <div className="ms-auto text-end">
                     <p className="text-xs text-ink/50">مبلغ</p>
-                    <Price value={order.total_amount} size="md" />
+                    <Price
+                      value={order.total_amount}
+                      currency={order.currency}
+                      size="md"
+                    />
                   </div>
                 </Card>
               </Link>

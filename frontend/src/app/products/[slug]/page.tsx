@@ -123,6 +123,7 @@ export default async function ProductPage({ params }: ProductPageProps) {
 
           <Price
             value={product.price}
+            currency={product.currency}
             wasValue={product.compare_at_price ?? null}
             size="lg"
             accentColor={theme.primary}

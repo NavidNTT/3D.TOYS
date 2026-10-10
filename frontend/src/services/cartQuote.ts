@@ -1,14 +1,15 @@
 import { serverApiBaseUrl } from '@/src/lib/apiBase';
-import type { ApiEnvelope, Product } from '@/src/types/product';
+import { isPurchasable, type ApiEnvelope, type Product } from '@/src/types/product';
 
 /**
  * Server-priced cart quote.
  *
  * The persisted cart only stores `{productId, slug, quantity}` — never a price.
  * This helper resolves each line against the live catalog so every rendered
- * amount comes from the API. Lines whose product vanished or went unpublished
- * cannot be priced and are returned separately, so the UI can offer to remove
- * them instead of silently charging a stale snapshot.
+ * amount comes from the API. Lines whose product vanished, went unpublished, or
+ * has no chargeable toman amount (a legacy USD row) cannot be priced and are
+ * returned separately, so the UI can offer to remove them instead of silently
+ * charging a stale snapshot.
  */
 
 export interface CartQuoteLine {
@@ -25,7 +26,13 @@ export interface CartQuote {
   totalItems: number;
 }
 
-/** Narrow an unknown value to a usable product row. */
+/**
+ * Narrow an unknown value to a usable product row.
+ *
+ * `price` may legitimately be `null` (a row with no chargeable toman amount),
+ * so requiring a number here would reject the very payload the safety contract
+ * is supposed to surface.
+ */
 function isProduct(value: unknown): value is Product {
   if (typeof value !== 'object' || value === null) return false;
 
@@ -35,7 +42,7 @@ function isProduct(value: unknown): value is Product {
     typeof candidate.id === 'number' &&
     typeof candidate.slug === 'string' &&
     typeof candidate.title === 'string' &&
-    typeof candidate.price === 'number' &&
+    (typeof candidate.price === 'number' || candidate.price === null) &&
     typeof candidate.stock === 'number'
   );
 }
@@ -164,12 +171,18 @@ export async function buildQuote(
       continue;
     }
 
-    if (product.is_active === false) {
+    // Two separate refusals, deliberately. Unpublished is a merchandising
+    // state; not-purchasable means there is no toman amount to charge at all.
+    // Either way the line must stay out of the subtotal rather than contribute
+    // a price it does not have.
+    if (product.is_active === false || !isPurchasable(product)) {
       quote.unavailableSlugs.push(line.slug);
       continue;
     }
 
     const quantity = Math.min(line.quantity, 99);
+    // `isPurchasable` narrowed `price` to a number, so this is integer
+    // arithmetic on toman — never a float, and never a coercion of null.
     const lineTotal = product.price * quantity;
 
     quote.lines.push({ product, quantity, lineTotal });

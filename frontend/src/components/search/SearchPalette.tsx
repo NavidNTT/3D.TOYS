@@ -267,7 +267,11 @@ export default function SearchPalette() {
                     )}
                   </span>
 
-                  <Price value={product.price} size="sm" />
+                  <Price
+                    value={product.price}
+                    currency={product.currency}
+                    size="sm"
+                  />
                 </button>
               </li>
             ))}

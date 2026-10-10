@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import type { Product } from '@/src/types/product';
+import { isPurchasable, type Product } from '@/src/types/product';
 
 /**
  * A cart line.
@@ -13,9 +13,12 @@ export interface CartItem {
   productId: number;
   slug: string;
   title: string;
-  /** Unit price in Toman, refreshed from the API before it is rendered. */
-  price: number;
-  /** Always IRT; kept so the contract survives a future currency. */
+  /**
+   * Snapshot of the unit price. Never rendered directly — the cart re-quotes
+   * from the API — so a stale value cannot become a charged amount.
+   */
+  price: number | null;
+  /** `'IRT'` for every line the store will accept. */
   currency: string | null;
   thumbnailUrl: string | null;
   quantity: number;
@@ -25,7 +28,12 @@ export interface CartItem {
 
 interface CartState {
   items: CartItem[];
-  addItem: (product: Product, qty?: number) => void;
+  /**
+   * @returns `false` when the product is not purchasable and nothing was
+   *          added, so the caller can tell the customer instead of showing a
+   *          false "added" confirmation.
+   */
+  addItem: (product: Product, qty?: number) => boolean;
   removeItem: (productId: number) => void;
   updateQuantity: (productId: number, qty: number) => void;
   clearCart: () => void;
@@ -65,7 +73,14 @@ export const useCartStore = create<CartState>()(
   persist(
     (set, get) => ({
       items: [],
-      addItem: (product, qty = 1) =>
+      addItem: (product, qty = 1) => {
+        // Fail closed. A product the server has not priced in toman — a legacy
+        // USD row, or a row with no amount yet — must never enter the cart:
+        // once it is here it is on its way into a checkout total.
+        if (!isPurchasable(product)) {
+          return false;
+        }
+
         set((state) => {
           const existing = state.items.find(
             (item) => item.productId === product.id,
@@ -102,7 +117,10 @@ export const useCartStore = create<CartState>()(
               },
             ],
           };
-        }),
+        });
+
+        return true;
+      },
 
       removeItem: (productId) =>
         set((state) => ({

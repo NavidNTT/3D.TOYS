@@ -5,7 +5,7 @@ import Link from 'next/link';
 import Button from '@/src/components/ui/Button';
 import Badge from '@/src/components/ui/Badge';
 import { useCartStore } from '@/src/store/useCartStore';
-import type { Product } from '@/src/types/product';
+import { isPurchasable, type Product } from '@/src/types/product';
 
 /**
  * Quantity stepper + add-to-cart, with the live stock state.
@@ -21,6 +21,9 @@ export default function ProductPurchasePanel({ product }: { product: Product }) 
   const [justAdded, setJustAdded] = useState(false);
 
   const inStock = product.stock > 0;
+  // Not a stock question: without a toman amount there is no price to charge,
+  // so the product is unbuyable at any quantity.
+  const purchasable = isPurchasable(product);
   const maxQuantity = Math.max(1, Math.min(product.stock, 99));
 
   const changeQuantity = (next: number) => {
@@ -29,8 +32,9 @@ export default function ProductPurchasePanel({ product }: { product: Product }) 
   };
 
   const add = () => {
-    addItem(product, quantity);
-    setJustAdded(true);
+    // `addItem` refuses a row with no toman amount; only confirm the addition
+    // when it actually happened.
+    setJustAdded(addItem(product, quantity));
   };
 
   return (
@@ -38,6 +42,15 @@ export default function ProductPurchasePanel({ product }: { product: Product }) 
       <div className="flex flex-wrap items-center gap-3">
         <StockBadge stock={product.stock} />
       </div>
+
+      {!purchasable && (
+        <p
+          role="status"
+          className="rounded-md bg-amber-50 px-4 py-3 text-sm font-bold text-amber-900"
+        >
+          قیمت تومانی این محصول هنوز نهایی نشده است؛ به‌زودی قابل خرید می‌شود.
+        </p>
+      )}
 
       <div className="flex flex-wrap items-center gap-3">
         <div
@@ -71,8 +84,17 @@ export default function ProductPurchasePanel({ product }: { product: Product }) 
           </button>
         </div>
 
-        <Button size="lg" onClick={add} disabled={!inStock} className="flex-1">
-          {inStock ? 'افزودن به سبد خرید' : 'ناموجود'}
+        <Button
+          size="lg"
+          onClick={add}
+          disabled={!inStock || !purchasable}
+          className="flex-1"
+        >
+          {!purchasable
+            ? 'قیمت در حال بررسی'
+            : inStock
+              ? 'افزودن به سبد خرید'
+              : 'ناموجود'}
         </Button>
       </div>
 

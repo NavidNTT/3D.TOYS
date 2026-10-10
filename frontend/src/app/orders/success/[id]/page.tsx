@@ -122,7 +122,11 @@ export default async function OrderSuccessPage({ params }: SuccessProps) {
           <div className="flex justify-between">
             <dt className="text-ink/60">مبلغ کل</dt>
             <dd>
-              <Price value={order.total_amount} size="md" />
+              <Price
+                value={order.total_amount}
+                currency={order.currency}
+                size="md"
+              />
             </dd>
           </div>
         </dl>

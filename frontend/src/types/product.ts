@@ -148,11 +148,34 @@ export interface Product {
   title: string;
   slug: string;
   description: string | null;
-  /** Integer Toman — the smallest unit is 1 Toman, no decimals anywhere. */
-  price: number;
+  /**
+   * Integer toman, or `null`.
+   *
+   * Null is not "free": it means this row has no chargeable toman amount —
+   * typically a legacy row whose original amount was preserved in USD. The API
+   * never sends a rounded stand-in, so `12.99` arrives as `null` and not `12`.
+   */
+  price: number | null;
   compare_at_price?: number | null;
-  /** Always `IRT`; kept so the contract survives a future currency. */
+  /**
+   * The amount's own currency: `'IRT'` for every sellable row, `'USD'` for a
+   * preserved legacy one. Never assumed — always read.
+   */
   currency?: string | null;
+  /**
+   * The server's answer to "may this be added to a cart and charged?".
+   * Authoritative: the storefront gates its add-to-cart on it so the UI and
+   * the checkout service can never disagree. See {@link isPurchasable()}.
+   */
+  purchasable?: boolean;
+  /**
+   * Preserved, verbatim original amount for a row that is not purchasable
+   * (e.g. `'12.99'`). Null for clean toman rows. Shown with its own currency
+   * rather than relabelled as toman.
+   */
+  legacy_price?: string | null;
+  legacy_compare_at_price?: string | null;
+  legacy_currency?: string | null;
   stock: number;
   is_active?: boolean;
   attributes: ProductAttributes | null;
@@ -160,6 +183,32 @@ export interface Product {
   media_3d: Media3D | null;
   created_at?: string | null;
   updated_at?: string | null;
+}
+
+/** A product the server has confirmed may be charged in toman right now. */
+export type PurchasableProduct = Product & { price: number };
+
+/**
+ * Can this product enter a cart (and therefore an IRT calculation)?
+ *
+ * Prefers the server's `purchasable` flag, which mirrors the checkout guard.
+ * A payload without that flag fails closed: an amount is only treated as toman
+ * when the row actually says so, because assuming "no currency means toman" is
+ * exactly how `12.99 USD` became `۱۲ تومان`.
+ *
+ * Narrows `price` to a number, so callers can multiply without a null check.
+ */
+export function isPurchasable(product: Product): product is PurchasableProduct {
+  if (typeof product.purchasable === 'boolean') {
+    return product.purchasable && typeof product.price === 'number';
+  }
+
+  return (
+    (product.currency ?? '').trim().toUpperCase() === 'IRT' &&
+    typeof product.price === 'number' &&
+    Number.isSafeInteger(product.price) &&
+    product.price >= 0
+  );
 }
 
 /**

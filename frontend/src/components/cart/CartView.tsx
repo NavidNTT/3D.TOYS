@@ -7,6 +7,7 @@ import Button from '@/src/components/ui/Button';
 import Card from '@/src/components/ui/Card';
 import Price from '@/src/components/ui/Price';
 import Skeleton from '@/src/components/ui/Skeleton';
+import { CURRENCY_IRT } from '@/src/lib/format';
 import { useCartStore } from '@/src/store/useCartStore';
 import type { CartQuote } from '@/src/services/cartQuote';
 
@@ -131,7 +132,8 @@ export default function CartView() {
         {unpricedItems.length > 0 && (
           <Card className="border border-amber-300/60 bg-amber-50 p-4">
             <p className="text-sm font-bold text-amber-900">
-              برخی اقلام دیگر در دسترس نیستند و قابل محاسبه نیستند.
+              برخی اقلام دیگر در دسترس نیستند یا قیمت تومانی نهایی ندارند و قابل
+              محاسبه نیستند.
             </p>
             <ul className="mt-2 space-y-1 text-sm text-amber-900/80">
               {unpricedItems.map((item) => (
@@ -182,7 +184,11 @@ export default function CartView() {
                   {line.product.title}
                 </Link>
                 <div className="mt-1">
-                  <Price value={line.product.price} size="sm" />
+                  <Price
+                    value={line.product.price}
+                    currency={line.product.currency}
+                    size="sm"
+                  />
                 </div>
               </div>
 
@@ -216,7 +222,9 @@ export default function CartView() {
               </div>
 
               <div className="w-32 text-end">
-                <Price value={line.lineTotal} size="md" />
+                {/* A line total exists only for a priced line, and every priced
+                    line is toman by construction. */}
+                <Price value={line.lineTotal} currency={CURRENCY_IRT} size="md" />
               </div>
 
               <button
@@ -244,7 +252,7 @@ export default function CartView() {
             <div className="flex justify-between">
               <dt className="text-ink/60">جمع کل</dt>
               <dd>
-                <Price value={quote.subtotal} size="md" />
+                <Price value={quote.subtotal} currency={CURRENCY_IRT} size="md" />
               </dd>
             </div>
           </dl>
