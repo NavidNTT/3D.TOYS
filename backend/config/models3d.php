@@ -23,8 +23,14 @@ return [
 
     /*
     |--------------------------------------------------------------------------
-    | Optimized Output Directory (public disk, relative)
+    | Optimized Output Directory (object key prefix on the ingest disk)
     |--------------------------------------------------------------------------
+    |
+    | Relative to the ingest disk's root, which is MinIO by default. The job
+    | stores the resulting key (e.g. `models/3d/optimized/robot_opt.glb`) in
+    | `media3d.optimized_file_url`, and Media3DResource resolves it through the
+    | canonical disk.
+    |
     */
 
     'output_directory' => env('MODEL_3D_OPTIMIZED_DIR', 'models/3d/optimized'),

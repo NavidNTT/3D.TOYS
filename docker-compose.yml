@@ -71,6 +71,12 @@ x-laravel-environment: &laravel-environment
   # AWS_ENDPOINT is the internal address, AWS_URL is what gets handed
   # to browsers (published port), so generated URLs stay clickable.
   FILESYSTEM_DISK: s3
+  # Canonical media disk, and the disk uploads are written to. Ingestion needs
+  # no local path any more: the Draco optimizer streams the model down into a
+  # private temp directory and pushes the result back
+  # (App\Jobs\Optimize3DModelJob). See config/media.php.
+  MEDIA_CANONICAL_DISK: ${MEDIA_CANONICAL_DISK:-s3}
+  MEDIA_INGEST_DISK: ${MEDIA_INGEST_DISK:-s3}
   AWS_ACCESS_KEY_ID: ${MINIO_ROOT_USER:-toy_admin}
   AWS_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:-toy_admin_secret}
   AWS_DEFAULT_REGION: us-east-1

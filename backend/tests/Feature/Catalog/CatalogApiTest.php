@@ -88,7 +88,16 @@ class CatalogApiTest extends TestCase
 
         $this->assertIsInt($response->json('data.price'));
         $this->assertIsInt($response->json('data.compare_at_price'));
-        $this->assertStringContainsString('/storage/models/3d/duck.glb', $response->json('data.media_3d.url'));
+        // A bare object key is canonical media: it resolves through the
+        // MinIO/S3 disk, so the URL is absolute, keeps the object key, and
+        // never carries the Docker-internal hostname the browser cannot
+        // resolve (see tests/Feature/Storage/MediaStorageTest.php).
+        $url = $response->json('data.media_3d.url');
+
+        $this->assertIsString($url);
+        $this->assertStringStartsWith('http', $url);
+        $this->assertStringContainsString('models/3d/duck.glb', $url);
+        $this->assertStringNotContainsString('minio:9000', $url);
     }
 
     public function test_a_product_without_a_stored_model_reports_no_media(): void

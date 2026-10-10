@@ -5,9 +5,11 @@ namespace App\Services\Orders;
 use App\Enums\OrderStatus;
 use App\Exceptions\InsufficientStockException;
 use App\Exceptions\ProductUnavailableException;
+use App\Exceptions\UnsupportedCurrencyException;
 use App\Models\Order;
 use App\Models\Product;
 use App\Models\User;
+use App\Support\Currency;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -15,12 +17,16 @@ use Illuminate\Support\Str;
 /**
  * Place orders.
  *
- * The two rules this class exists to enforce:
+ * The three rules this class exists to enforce:
  *
  *  1. The client never decides the price. Amounts are read from the product row
  *     inside the same locked read that checks stock, so a request cannot buy a
  *     500,000 Toman toy for 1,000 Toman.
- *  2. Stock never goes negative and never leaks. Validation, decrement and the
+ *  2. Only toman is ever charged. A row whose currency is not `IRT`, or whose
+ *     amount is not an exact integer, is refused outright (see
+ *     {@see self::chargeableUnitPrice()}) instead of being truncated into a
+ *     toman figure. `12.99 USD` must never be charged as `12` toman.
+ *  3. Stock never goes negative and never leaks. Validation, decrement and the
  *     order insert share one transaction, so a rejected line rolls back the
  *     whole cart — a partially-created order can never hold stock hostage.
  */
@@ -52,6 +58,13 @@ class OrderService
                     throw new ProductUnavailableException($productId, $product?->title);
                 }
 
+                // Integer Toman, and *only* for a row that really is priced in
+                // toman. Resolved before any stock moves, so a refused line
+                // leaves the row untouched. Deliberately checked before stock:
+                // "this has no price" is a more useful answer than "this is out
+                // of stock" for a product that could not be sold either way.
+                $unitPrice = self::chargeableUnitPrice($product);
+
                 // Checked against the locked row, so a concurrent checkout
                 // cannot sell the same unit twice.
                 if ($product->stock < $quantity) {
@@ -62,10 +75,6 @@ class OrderService
                         $product->stock,
                     );
                 }
-
-                // Integer Toman straight from the cast — no float conversion,
-                // so the amount written to the invoice is exact.
-                $unitPrice = (int) $product->price;
 
                 $lines[] = [
                     'product_id' => $product->id,
@@ -82,7 +91,10 @@ class OrderService
             $order = $user->orders()->create([
                 ...$shipping,
                 'order_number' => $this->generateOrderNumber(),
+                // Integer toman: the invoice records its own unit, so the
+                // storefront never has to infer one from the store's default.
                 'total_amount' => $this->total($lines),
+                'currency' => Currency::IRT,
                 'status' => OrderStatus::Pending,
             ]);
 
@@ -90,6 +102,33 @@ class OrderService
 
             return $order->load('items');
         });
+    }
+
+    /**
+     * The exact amount this line may be charged, or a refusal.
+     *
+     * This is the checkout half of the legacy-money safety rule. The amount
+     * comes from the product's own accessor, which returns an integer only when
+     * the row's currency is IRT *and* the stored value is an exact integer. A
+     * legacy `12.99 USD` row therefore yields null — and null is refused here
+     * rather than cast, because `(int) 12.99` is `12`, and silently charging
+     * twelve toman for a product nobody has priced yet is worse than declining
+     * the order.
+     *
+     * @throws UnsupportedCurrencyException when the row has no chargeable toman amount
+     */
+    private static function chargeableUnitPrice(Product $product): int
+    {
+        if (! Currency::isSellable($product->currency) || $product->price === null) {
+            throw new UnsupportedCurrencyException(
+                $product->id,
+                $product->title,
+                $product->currency,
+                $product->legacyAmount(),
+            );
+        }
+
+        return $product->price;
     }
 
     /**

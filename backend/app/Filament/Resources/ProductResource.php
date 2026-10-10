@@ -4,6 +4,10 @@ namespace App\Filament\Resources;
 
 use App\Filament\Resources\ProductResource\Pages;
 use App\Models\Product;
+use App\Models\ProductMedia3D;
+use App\Rules\IrtAmount;
+use App\Support\MediaStorage;
+use App\Support\Currency;
 use Filament\Forms;
 use Filament\Forms\Components\FileUpload;
 use Filament\Forms\Components\KeyValue;
@@ -20,6 +24,7 @@ use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
 class ProductResource extends Resource
@@ -62,8 +67,35 @@ class ProductResource extends Resource
                             ->required()
                             ->numeric()
                             ->integer()
+                            ->rule(new IrtAmount)
                             ->suffix('تومان')
-                            ->minValue(0),
+                            ->minValue(0)
+                            ->helperText('مبلغ باید عدد صحیح و نامنفی به تومان باشد. قیمتهای قدیمی دلاری باید پیش از فروش به تومان نهایی شوند.'),
+                        // Only toman is sellable, so only toman is offered. This is
+                        // the guard that stops a new USD row being created: the
+                        // form cannot express "charge in dollars".
+                        Select::make('currency')
+                            ->label('Currency')
+                            ->options([Currency::IRT => 'IRT — تومان'])
+                            ->default(Currency::IRT)
+                            ->required()
+                            ->selectablePlaceholder(false)
+                            ->helperText('فقط تومان قابل فروش است. مبالغ قدیمی حفظ شده و در «قیمت قدیمی» نمایش داده میشوند.'),
+                        // The preserved, pre-migration amount, shown verbatim while
+                        // a legacy row waits for an approved USD→IRT mapping. This
+                        // is the "display the legacy currency correctly" half of
+                        // the safety rule: nothing here is converted automatically.
+                        Forms\Components\Placeholder::make('legacy_price_notice')
+                            ->label('قیمت قدیمی (حفظ‌شده)')
+                            ->visible(fn (?Product $record): bool => $record !== null
+                                && ! $record->purchasable()
+                                && $record->legacyAmount() !== null)
+                            ->content(fn (?Product $record): string => sprintf(
+                                '%s %s — این مقدار حفظ شده و به تومان تبدیل نشده است؛ پیش از فروش باید دستی تأیید و به تومان نهایی شود.',
+                                $record?->legacyAmount() ?? '—',
+                                Currency::label($record?->legacyCurrency()),
+                            ))
+                            ->columnSpanFull(),
                         TextInput::make('stock')
                             ->required()
                             ->numeric()
@@ -99,32 +131,60 @@ class ProductResource extends Resource
                     ->schema([
                         FileUpload::make('original_file_url')
                             ->label('3D Model File (.glb, .gltf)')
-                            ->disk('public')
+                            ->disk(MediaStorage::ingestDisk())
                             ->directory('models/3d')
                             ->acceptedFileTypes(['model/gltf-binary', 'model/gltf+json', '.glb', '.gltf'])
                             ->maxSize(65536)
                             ->downloadable()
                             ->columnSpanFull(),
+                        // Inside a `->relationship('media3d')` section, Filament
+                        // resolves `$record` to the *related* model, not the
+                        // product. Typing this closure as `?Product` therefore
+                        // threw a TypeError and made the product edit page
+                        // answer 500 — which also hid the legacy-price notice
+                        // added below. Read the media row directly.
                         Forms\Components\Placeholder::make('draco_status')
                             ->label('وضعیت بهینه‌سازی (Draco)')
-                            ->content(function (?Product $record): string {
-                                $media = $record?->media3d;
-
-                                if (! $media || empty($media->original_file_url)) {
+                            ->content(function (?ProductMedia3D $record): string {
+                                if (! $record || empty($record->original_file_url)) {
                                     return '—';
                                 }
 
-                                if (empty($media->optimized_file_url)) {
+                                if (empty($record->optimized_file_url)) {
                                     return 'در حال بهینه‌سازی';
                                 }
 
                                 $savings = '';
-                                $original = $media->original_file_url
-                                    ? @filesize(public_path(ltrim($media->original_file_url, '/')))
-                                    : false;
-                                $optimized = (int) ($media->file_size ?? 0);
+                                $optimized = (int) ($record->file_size ?? 0);
 
-                                if ($original && $optimized > 0 && $optimized < $original) {
+                                // Measured through the disk, not `public_path()`:
+                                // uploads now land in object storage, where a
+                                // filesystem path does not exist at all. A missing
+                                // object simply reports no saving — the number is
+                                // never guessed.
+                                $originalKey = ltrim((string) $record->original_file_url, '/');
+                                // A remote fixture (the seeded Khronos Duck URL) is
+                                // not ours to measure, so it reports no saving
+                                // rather than a request to a third party.
+                                $original = 0;
+
+                                if (! str_contains($originalKey, '://')) {
+                                    try {
+                                        $disk = Storage::disk(MediaStorage::ingestDisk());
+                                        $original = $disk->exists($originalKey)
+                                            ? (int) $disk->size($originalKey)
+                                            : 0;
+                                    } catch (\Throwable) {
+                                        // A savings percentage is not worth a 500 on
+                                        // the edit form. The upload fields below hit
+                                        // the same disk and still surface a real
+                                        // outage, so a blip here only omits the
+                                        // figure instead of hiding the problem.
+                                        $original = 0;
+                                    }
+                                }
+
+                                if ($optimized > 0 && $original > 0 && $optimized < $original) {
                                     $pct = round((($original - $optimized) / $original) * 100, 1);
                                     $savings = ' — صرفه‌جویی: '.$pct.'٪';
                                 }
@@ -135,7 +195,7 @@ class ProductResource extends Resource
                         FileUpload::make('thumbnail_url')
                             ->label('3D Model Thumbnail')
                             ->image()
-                            ->disk('public')
+                            ->disk(MediaStorage::ingestDisk())
                             ->directory('models/thumbnails')
                             ->columnSpanFull(),
                         Select::make('lighting_preset')
@@ -186,6 +246,13 @@ class ProductResource extends Resource
                     ->label('Price')
                     ->numeric(decimalPlaces: 0, decimalSeparator: '.', thousandsSeparator: ',')
                     ->suffix(' تومان')
+                    ->placeholder('نامشخص — قیمت قدیمی')
+                    ->sortable(),
+                // At-a-glance answer to "which rows are still not toman?".
+                TextColumn::make('currency')
+                    ->label('Currency')
+                    ->badge()
+                    ->color(fn (?Product $record): string => Currency::isSellable($record?->currency) ? 'success' : 'warning')
                     ->sortable(),
                 TextColumn::make('stock')
                     ->numeric()

@@ -7,6 +7,7 @@ use App\Models\Order;
 use App\Models\Product;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
@@ -414,5 +415,111 @@ class CheckoutTest extends TestCase
                 ['product_id' => 'PRODUCT', 'quantity' => 2],
             ], 'items.0.product_id'],
         ];
+    }
+
+    /**
+     * The legacy-money guard, at the checkout boundary.
+     *
+     * The product is published and in stock; what it lacks is a toman price. A
+     * row like this must not be charged, and above all must not be charged as
+     * its truncated integer: `12.99` becomes `12` under a naive cast, and
+     * twelve toman for an unpriced product is silent corruption.
+     */
+    public function test_a_product_without_a_toman_price_cannot_be_ordered(): void
+    {
+        $this->authenticate();
+        $product = $this->legacyProduct('legacy-duck', '12.99', 'USD', 10);
+
+        $this->postJson(self::CHECKOUT, $this->payload([
+            'items' => [['product_id' => $product->id, 'quantity' => 1]],
+        ]))
+            ->assertStatus(422)
+            ->assertJson(['success' => false])
+            ->assertJsonPath('data.reason', 'unsupported_currency')
+            ->assertJsonPath('data.currency', 'USD')
+            ->assertJsonPath('data.legacy_amount', '12.99')
+            ->assertJsonPath('data.product_id', $product->id);
+
+        $this->assertDatabaseCount('orders', 0);
+        $this->assertDatabaseCount('order_items', 0);
+        $this->assertDatabaseMissing('orders', ['total_amount' => 12]);
+        $this->assertSame(10, $product->fresh()->stock);
+    }
+
+    public function test_a_fractional_toman_amount_cannot_be_ordered(): void
+    {
+        $this->authenticate();
+        $product = $this->legacyProduct('fractional', '12.99', 'IRT', 4);
+
+        $this->postJson(self::CHECKOUT, $this->payload([
+            'items' => [['product_id' => $product->id, 'quantity' => 1]],
+        ]))
+            ->assertStatus(422)
+            ->assertJsonPath('data.reason', 'unsupported_currency')
+            ->assertJsonPath('data.currency', 'IRT')
+            ->assertJsonPath('data.legacy_amount', '12.99');
+
+        $this->assertDatabaseCount('orders', 0);
+        $this->assertDatabaseMissing('orders', ['total_amount' => 12]);
+        $this->assertSame(4, $product->fresh()->stock);
+    }
+
+    public function test_one_unpriced_line_rolls_back_the_whole_order(): void
+    {
+        $this->authenticate();
+        $clearlyPriced = Product::factory()->pricedAt(1_000_000)->create(['stock' => 10]);
+        $unpriced = $this->legacyProduct('legacy-sub', '18.50', 'USD', 5);
+
+        $this->postJson(self::CHECKOUT, $this->payload([
+            'items' => [
+                ['product_id' => $clearlyPriced->id, 'quantity' => 2],
+                ['product_id' => $unpriced->id, 'quantity' => 1],
+            ],
+        ]))
+            ->assertStatus(422)
+            ->assertJsonPath('data.reason', 'unsupported_currency');
+
+        $this->assertDatabaseCount('orders', 0);
+        $this->assertDatabaseCount('order_items', 0);
+        $this->assertSame(10, $clearlyPriced->fresh()->stock);
+        $this->assertSame(5, $unpriced->fresh()->stock);
+    }
+
+    public function test_a_placed_order_records_its_currency(): void
+    {
+        $this->authenticate();
+        $product = Product::factory()->pricedAt(1_000_000)->create(['stock' => 3]);
+
+        $this->postJson(self::CHECKOUT, $this->payload([
+            'items' => [['product_id' => $product->id, 'quantity' => 1]],
+        ]))
+            ->assertStatus(201)
+            ->assertJsonPath('data.currency', 'IRT')
+            ->assertJsonPath('data.items.0.currency', 'IRT');
+
+        $this->assertDatabaseHas('orders', ['currency' => 'IRT']);
+    }
+
+    /**
+     * A row shaped the way the pre-contract schema allowed: a decimal amount in
+     * a legacy currency, written straight through the query builder because the
+     * model's own setter now refuses to store one.
+     */
+    private function legacyProduct(string $slug, string $amount, string $currency, int $stock): Product
+    {
+        DB::table('products')->insert([
+            'title' => 'Legacy '.$slug,
+            'slug' => $slug,
+            'price' => $amount,
+            'compare_at_price' => null,
+            'currency' => $currency,
+            'stock' => $stock,
+            'is_active' => 1,
+            'attributes' => null,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        return Product::query()->where('slug', $slug)->sole();
     }
 }

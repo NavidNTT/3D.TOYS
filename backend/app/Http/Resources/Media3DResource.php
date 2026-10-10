@@ -3,6 +3,7 @@
 namespace App\Http\Resources;
 
 use App\Models\ProductMedia3D;
+use App\Support\MediaStorage;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 use Illuminate\Support\Facades\Storage;
@@ -89,15 +90,22 @@ class Media3DResource extends JsonResource
 
         // The optimizer stores the public-facing path, which already contains
         // the `/storage` prefix that the disk helper adds on its own.
-        if (str_starts_with($relative, 'storage/')) {
+        $isLegacyLocalPath = str_starts_with($relative, 'storage/');
+
+        if ($isLegacyLocalPath) {
             $relative = substr($relative, strlen('storage/'));
         }
 
         // The `public` disk is the one the 3D pipeline reads and writes (see
         // Optimize3DModelJob) and `public/storage` is symlinked to it, so
         // APP_URL + /storage/... is reachable from the browser. Serving 3D
-        // media through MinIO instead is a one-line change here.
-        return Storage::disk('public')->url($relative);
+        // media through MinIO instead is exactly what the canonical branch
+        // below does: a bare object key resolves against the MinIO disk, while
+        // the legacy `/storage/...` shape keeps resolving against the local
+        // public disk the optimizer still writes to.
+        return $isLegacyLocalPath
+            ? Storage::disk('public')->url($relative)
+            : MediaStorage::canonicalUrl($relative);
     }
 
     /**
