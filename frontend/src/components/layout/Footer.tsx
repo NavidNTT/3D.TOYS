@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import Container from '@/src/components/ui/Container';
+import { FOOTER_QUICK_LINKS } from '@/src/lib/catalog';
 
 /**
  * Site footer (server component — static links only).
@@ -7,13 +8,11 @@ import Container from '@/src/components/ui/Container';
  * The trust-badge slot is deliberately an empty, clearly marked placeholder:
  * the owner drops in the Enamad/نماد markup there once the store is registered,
  * and nothing else has to change.
+ *
+ * The quick links live in src/lib/catalog.ts. This block is the only navigation
+ * a phone sees — the header collapses its menu on small screens — so the link to
+ * the full catalog has to be here, not just in the header.
  */
-
-const FOOTER_LINKS = [
-  { href: '/about', label: 'درباره ما' },
-  { href: '/contact', label: 'تماس با ما' },
-  { href: '/returns', label: 'قوانین و بازگشت کالا' },
-];
 
 export default function Footer() {
   return (
@@ -30,7 +29,7 @@ export default function Footer() {
         <nav aria-label="پیوندهای پانویس" className="space-y-3">
           <p className="text-sm font-bold text-ink/80">دسترسی سریع</p>
           <ul className="space-y-2 text-sm text-ink/60">
-            {FOOTER_LINKS.map((link) => (
+            {FOOTER_QUICK_LINKS.map((link) => (
               <li key={link.href}>
                 <Link
                   href={link.href}

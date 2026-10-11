@@ -4,6 +4,7 @@ import { useRef, useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import ModelPreview from '@/src/components/3d/ModelPreview';
+import { categoryPath } from '@/src/lib/catalog';
 import { resolveTheme } from '@/src/lib/theme';
 import type { Category } from '@/src/types/product';
 
@@ -40,7 +41,7 @@ export default function CategoryTile({
 
   return (
     <Link
-      href={`/categories/${category.slug}`}
+      href={categoryPath(category.slug)}
       onMouseEnter={startPreview}
       onMouseLeave={stopPreview}
       className="group relative flex min-h-56 flex-col justify-end overflow-hidden rounded-xl border p-5 shadow-card transition duration-300 hover:-translate-y-1 hover:shadow-pop"

@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { categoryPath } from '@/src/lib/catalog';
 import { resolveTheme } from '@/src/lib/theme';
 import type { Category } from '@/src/types/product';
 
@@ -8,6 +9,9 @@ import type { Category } from '@/src/types/product';
  * Each chip is tinted with its own `theme_config` accent (applied inline, since
  * Tailwind cannot compile runtime colours). Horizontal scroll on mobile, wrap on
  * larger screens — no carousel JavaScript for what is a plain list of links.
+ *
+ * Shared by the home page and `/products`, so the catalog and the landing page
+ * offer the same set of shelves; the route is built by src/lib/catalog.ts.
  */
 export default function CategoryStrip({ categories }: { categories: Category[] }) {
   if (categories.length === 0) {
@@ -26,7 +30,7 @@ export default function CategoryStrip({ categories }: { categories: Category[] }
         return (
           <li key={category.id} className="snap-start">
             <Link
-              href={`/categories/${category.slug}`}
+              href={categoryPath(category.slug)}
               className="flex items-center gap-2 whitespace-nowrap rounded-full border px-4 py-2 text-sm font-bold transition hover:-translate-y-0.5"
               style={{
                 color: theme.primary,

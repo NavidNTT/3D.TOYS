@@ -1,27 +1,33 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
+import CategoryStrip from '@/src/components/home/CategoryStrip';
 import ProductCard from '@/src/components/products/ProductCard';
 import Breadcrumbs from '@/src/components/ui/Breadcrumbs';
 import Card from '@/src/components/ui/Card';
 import Container from '@/src/components/ui/Container';
 import EmptyState from '@/src/components/ui/EmptyState';
 import Pagination from '@/src/components/ui/Pagination';
+import { formatNumberFa } from '@/src/lib/format';
+import { getAllCategories } from '@/src/services/categoryService';
 import { getProducts } from '@/src/services/productService';
-import type { Product, Paginated } from '@/src/types/product';
+import type { Category, Paginated, Product } from '@/src/types/product';
 
 /**
- * Public catalog listing (`/products`).
+ * Public catalog listing (`/products`) — the whole storefront in one place.
  *
- * Server-rendered from the existing paginated catalog endpoint, like the
- * category and search grids: the same `ProductCard`, the same currency-aware
- * `Price`, the same pagination control. Rendered per request so the grid
- * reflects live stock and the current price contract.
+ * Every published product is listed, not a curated selection: the six preserved
+ * legacy rows *and* the eight MinIO-backed 3D products, because a product that
+ * only its direct URL can reach is not really published. Categories are the
+ * other half of the same promise, so the chip row is fetched from the same
+ * endpoint the category pages use rather than being hardcoded here; a category
+ * that gains a product appears in both places at once.
  *
  * The money contract is enforced by the shared components rather than here: a
  * row whose API payload is `price: null, currency: 'USD', purchasable: false`
  * (a preserved legacy amount) renders `قیمت نامشخص` through `Price` and gets a
- * disabled add-to-cart button plus an "unavailable" badge from `ProductCard`.
- * Nothing on this page multiplies, truncates or relabels an amount.
+ * disabled add-to-cart button plus a "price under review" badge from
+ * `ProductCard`. Nothing on this page multiplies, truncates or relabels an
+ * amount.
  */
 export const dynamic = 'force-dynamic';
 
@@ -37,24 +43,50 @@ export const metadata: Metadata = {
   alternates: { canonical: '/products' },
 };
 
+/** The listing, or an explicit failure — never an empty grid that reads as "none". */
+type Listing = {
+  items: Product[];
+  meta: Paginated<Product>['meta'] | null;
+  failed: boolean;
+};
+
+async function loadListing(page: number): Promise<Listing> {
+  try {
+    const { items, meta } = await getProducts({ page, per_page: PER_PAGE });
+
+    return { items, meta, failed: false };
+  } catch {
+    // An unreachable or failing API is an infrastructure problem: say so
+    // plainly instead of rendering an empty grid that looks like "no products".
+    return { items: [], meta: null, failed: true };
+  }
+}
+
+/**
+ * The category chips, best effort.
+ *
+ * A category list that fails must not take the catalog down with it: the
+ * products are the page, the chips are a shortcut to the same rows grouped by
+ * shelf. The API also caches this list for 30s, so the cost is one call.
+ */
+async function loadCategories(): Promise<Category[]> {
+  try {
+    return await getAllCategories();
+  } catch {
+    return [];
+  }
+}
+
 export default async function ProductsPage({ searchParams }: ProductsPageProps) {
   const { page } = await searchParams;
   const pageNumber = Math.max(1, Number.parseInt(page ?? '1', 10) || 1);
 
-  let items: Product[] = [];
-  let meta: Paginated<Product>['meta'] | null = null;
-  let failed = false;
+  const [categories, listing] = await Promise.all([
+    loadCategories(),
+    loadListing(pageNumber),
+  ]);
 
-  try {
-    const result = await getProducts({ page: pageNumber, per_page: PER_PAGE });
-
-    items = result.items;
-    meta = result.meta;
-  } catch {
-    // An unreachable or failing API is an infrastructure problem: say so
-    // plainly instead of rendering an empty grid that looks like "no products".
-    failed = true;
-  }
+  const { items, meta, failed } = listing;
 
   return (
     <Container className="py-8">
@@ -65,6 +97,17 @@ export default async function ProductsPage({ searchParams }: ProductsPageProps) 
         هر کارت را می‌توانید بچرخانید؛ محصولاتی که قیمت تومانی‌شان نهایی نشده
         است تا زمان تعیین قیمت قابل خرید نیستند.
       </p>
+      {meta && (
+        <p className="tnum mt-1 text-sm text-ink/60">
+          {formatNumberFa(meta.total)} محصول
+        </p>
+      )}
+
+      {!failed && categories.length > 0 && (
+        <nav aria-label="دسته‌بندی‌ها" className="mt-6">
+          <CategoryStrip categories={categories} />
+        </nav>
+      )}
 
       {failed ? (
         <Card className="mt-8 p-8 text-center">

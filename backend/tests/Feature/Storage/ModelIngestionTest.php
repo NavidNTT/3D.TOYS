@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Storage;
 
+use App\Models\Category;
 use App\Models\Product;
 use App\Models\ProductMedia3D;
 use Illuminate\Console\Command;
@@ -423,6 +424,63 @@ class ModelIngestionTest extends TestCase
         $this->assertSame(count($slugs), count(array_unique($slugs)), 'Slugs must be unique.');
         $this->assertSame(count($skus), count(array_unique($skus)), 'SKUs must be unique.');
         $this->assertSame(count($keys), count(array_unique($keys)), 'Object keys must be unique.');
+    }
+
+    public function test_it_shelves_a_new_product_on_the_category_the_manifest_names(): void
+    {
+        $this->writeFixture('robot.glb', $this->glb('robot'));
+        $this->useManifest([
+            [
+                'slug' => 'robot-toy',
+                'title' => 'Robot Toy',
+                'sku' => 'TOY-3D-ROBOT',
+                'category' => 'model-cars',
+                'description' => 'A robot.',
+                'sources' => ['robot.glb' => 'models/robot.glb'],
+            ],
+        ]);
+
+        $this->artisan('toys:ingest-3d')->assertExitCode(Command::SUCCESS);
+
+        $product = Product::query()->where('slug', 'robot-toy')->firstOrFail();
+
+        $this->assertSame('model-cars', $product->category?->slug);
+
+        // The row comes from the taxonomy, not from a name invented here.
+        $category = Category::query()->where('slug', 'model-cars')->firstOrFail();
+
+        $this->assertSame('Model Cars', $category->name);
+        $this->assertSame('#e11d48', $category->theme_config['primary_color']);
+
+        // …and the category is what the storefront navigates by, so the
+        // product is now reachable through it.
+        $this->getJson('/api/v1/products?category=model-cars')
+            ->assertOk()
+            ->assertJsonCount(1, 'data.data')
+            ->assertJsonPath('data.data.0.slug', 'robot-toy');
+    }
+
+    public function test_it_refuses_a_manifest_category_that_is_not_in_the_taxonomy(): void
+    {
+        $this->writeFixture('robot.glb', $this->glb('robot'));
+        $this->useManifest([
+            [
+                'slug' => 'robot-toy',
+                'title' => 'Robot Toy',
+                'sku' => 'TOY-3D-ROBOT',
+                'category' => 'not-a-real-shelf',
+                'description' => 'A robot.',
+                'sources' => ['robot.glb' => 'models/robot.glb'],
+            ],
+        ]);
+
+        $this->artisan('toys:ingest-3d')->assertExitCode(Command::FAILURE);
+
+        // Stopped before anything was written: a product nobody can find is
+        // worse than a failed run an operator can fix.
+        $this->assertSame(0, Product::query()->count());
+        $this->assertSame(0, Category::query()->count());
+        $this->assertSame([], Storage::disk('s3')->allFiles());
     }
 
     /**

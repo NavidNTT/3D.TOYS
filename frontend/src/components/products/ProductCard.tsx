@@ -6,6 +6,12 @@ import Link from 'next/link';
 import ModelPreview from '@/src/components/3d/ModelPreview';
 import Badge from '@/src/components/ui/Badge';
 import Price from '@/src/components/ui/Price';
+import {
+  categoryLabel,
+  has3DModel,
+  productPath,
+  VIEW_MODEL_LABEL,
+} from '@/src/lib/catalog';
 import { resolveTheme } from '@/src/lib/theme';
 import { useCartStore } from '@/src/store/useCartStore';
 import { isPurchasable, type Product } from '@/src/types/product';
@@ -17,12 +23,19 @@ import { isPurchasable, type Product } from '@/src/types/product';
  * over the card on a hover-capable device (after a short intent delay), or after
  * an explicit tap on the "3D" toggle on touch. A grid therefore never boots more
  * than the one canvas the user is actually looking at.
+ *
+ * Discovery is explicit too. Every route on this card — poster, title and the
+ * labelled "مشاهده مدل سه‌بعدی" link — is built by src/lib/catalog.ts from the
+ * product slug, so a card can only point at the route the API itself resolves.
+ * A product with no category says so (`بدون دسته‌بندی`) instead of leaving a
+ * silent gap where every other card has a badge.
  */
 export default function ProductCard({ product }: { product: Product }) {
   const addItem = useCartStore((state) => state.addItem);
   const theme = resolveTheme(product.category?.theme_config);
 
   const poster = product.media_3d?.thumbnail_url ?? null;
+  const hasModel = has3DModel(product);
   const modelUrl = product.media_3d?.url ?? null;
   const inStock = product.stock > 0;
   // Distinct from `inStock`: the row exists and may be in stock, but has no
@@ -56,7 +69,7 @@ export default function ProductCard({ product }: { product: Product }) {
         onMouseEnter={startPreview}
         onMouseLeave={stopPreview}
       >
-        <Link href={`/products/${product.slug}`} aria-label={product.title}>
+        <Link href={productPath(product.slug)} aria-label={product.title}>
           {poster ? (
             <Image
               src={poster}
@@ -78,7 +91,7 @@ export default function ProductCard({ product }: { product: Product }) {
           <ModelPreview modelUrl={modelUrl} className="absolute inset-0" />
         )}
 
-        {modelUrl && (
+        {hasModel && (
           <button
             type="button"
             onClick={() => setPreview((value) => !value)}
@@ -104,15 +117,26 @@ export default function ProductCard({ product }: { product: Product }) {
       </div>
 
       <div className="flex flex-1 flex-col gap-2 p-4">
-        {product.category && (
-          <Badge color={theme.primary}>{product.category.name}</Badge>
-        )}
+        <Badge color={product.category ? theme.primary : null}>
+          {categoryLabel(product.category)}
+        </Badge>
 
         <h3 className="line-clamp-2 text-base font-bold leading-snug">
-          <Link href={`/products/${product.slug}`} className="hover:underline">
+          <Link href={productPath(product.slug)} className="hover:underline">
             {product.title}
           </Link>
         </h3>
+
+        {hasModel && (
+          <Link
+            href={productPath(product.slug)}
+            aria-label={`${VIEW_MODEL_LABEL} — ${product.title}`}
+            className="inline-flex items-center gap-1 text-xs font-bold text-brand-600 hover:underline"
+          >
+            <span aria-hidden>🧊</span>
+            {VIEW_MODEL_LABEL}
+          </Link>
+        )}
 
         <div className="mt-auto flex items-center justify-between gap-2">
           <Price

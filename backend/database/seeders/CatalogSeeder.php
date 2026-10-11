@@ -38,55 +38,17 @@ class CatalogSeeder extends Seeder
     /**
      * Categories, each with the palette the storefront themes its buttons,
      * badges and container glows with (`theme_config`).
+     *
+     * The definitions live in config/catalog.php, not here: the fixture
+     * ingestion command and `toys:assign-categories` read the same list, and a
+     * taxonomy with two authors drifts. Matching on the unique `slug` keeps the
+     * seed idempotent and, importantly, keeps existing category **ids** — the
+     * ids product rows and shared `/categories/{slug}` URLs already point at.
      */
     private function seedCategories(): void
     {
-        $categories = [
-            [
-                'name' => 'Bath Toys',
-                'slug' => 'bath-toys',
-                'description' => 'Floating, squeaking and endlessly splash-proof.',
-                'theme_config' => [
-                    'primary_color' => '#38bdf8',
-                    'glow_color' => '#0ea5e9',
-                    'accent_color' => '#e0f2fe',
-                    'background_color' => '#0b1020',
-                ],
-            ],
-            [
-                'name' => 'Building Blocks',
-                'slug' => 'building-blocks',
-                'description' => 'Interlocking sets that scale from a tower to a city.',
-                'theme_config' => [
-                    'primary_color' => '#f59e0b',
-                    'glow_color' => '#fbbf24',
-                    'accent_color' => '#fde68a',
-                    'background_color' => '#1a1206',
-                ],
-            ],
-            [
-                'name' => 'Collectible Figures',
-                'slug' => 'collectible-figures',
-                'description' => 'Hand-finished figures for the shelf, not the floor.',
-                'theme_config' => [
-                    'primary_color' => '#a78bfa',
-                    'glow_color' => '#8b5cf6',
-                    'accent_color' => '#ddd6fe',
-                    'background_color' => '#120b24',
-                ],
-            ],
-            [
-                'name' => 'Remote Control',
-                'slug' => 'remote-control',
-                'description' => 'Motorised toys with real suspensions and real batteries.',
-                'theme_config' => [
-                    'primary_color' => '#34d399',
-                    'glow_color' => '#10b981',
-                    'accent_color' => '#d1fae5',
-                    'background_color' => '#04170f',
-                ],
-            ],
-        ];
+        /** @var list<array{name: string, slug: string, description?: string|null, theme_config?: array<string, mixed>|null}> $categories */
+        $categories = array_values((array) config('catalog.categories', []));
 
         foreach ($categories as $category) {
             Category::query()->updateOrCreate(

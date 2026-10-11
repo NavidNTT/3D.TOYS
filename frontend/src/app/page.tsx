@@ -6,6 +6,13 @@ import ProductCard from '@/src/components/products/ProductCard';
 import Container from '@/src/components/ui/Container';
 import EmptyState from '@/src/components/ui/EmptyState';
 import Section from '@/src/components/ui/Section';
+import {
+  ALL_CATEGORIES_LABEL,
+  ALL_CATEGORIES_PATH,
+  ALL_PRODUCTS_LABEL,
+  ALL_PRODUCTS_PATH,
+  productPath,
+} from '@/src/lib/catalog';
 import { resolveTheme } from '@/src/lib/theme';
 import { getAllCategories } from '@/src/services/categoryService';
 import { getProducts } from '@/src/services/productService';
@@ -17,6 +24,10 @@ import { getProducts } from '@/src/services/productService';
  * `force-dynamic` because the catalog API is unreachable during the Docker
  * image build and prices/stock must not be baked into a full-page cache; the
  * underlying fetches still cache for 30s at the data layer.
+ *
+ * The featured rail is a *selection* — eight in-stock rows — and never the
+ * inventory. Every block here that shows products links to `/products`, where
+ * all fourteen live, so the home page cannot be mistaken for the whole catalog.
  */
 export const dynamic = 'force-dynamic';
 
@@ -80,15 +91,22 @@ export default async function HomePage() {
           </p>
 
           <div className="flex flex-wrap gap-3">
+            {/* The catalog is the shop, so it is the primary action here. */}
             <Link
-              href="/categories"
+              href={ALL_PRODUCTS_PATH}
               className="rounded-md bg-brand-500 px-5 py-3 text-sm font-bold text-white shadow-card transition hover:bg-brand-600"
             >
-              مشاهده دسته‌بندی‌ها
+              {ALL_PRODUCTS_LABEL}
+            </Link>
+            <Link
+              href={ALL_CATEGORIES_PATH}
+              className="rounded-md border border-ink/15 bg-surface px-5 py-3 text-sm font-bold text-ink/80 transition hover:bg-cream-100"
+            >
+              {ALL_CATEGORIES_LABEL}
             </Link>
             {featured && (
               <Link
-                href={`/products/${featured.slug}`}
+                href={productPath(featured.slug)}
                 className="rounded-md border border-ink/15 bg-surface px-5 py-3 text-sm font-bold text-ink/80 transition hover:bg-cream-100"
               >
                 دیدن محصول ویژه
@@ -116,9 +134,17 @@ export default async function HomePage() {
       </Section>
 
       <Section labelledBy="featured-heading">
-        <h2 id="featured-heading" className="mb-4 font-display text-2xl text-ink">
-          محصولات ویژه
-        </h2>
+        <div className="mb-4 flex flex-wrap items-baseline justify-between gap-2">
+          <h2 id="featured-heading" className="font-display text-2xl text-ink">
+            محصولات ویژه
+          </h2>
+          <Link
+            href={ALL_PRODUCTS_PATH}
+            className="text-sm font-bold text-brand-600 hover:underline"
+          >
+            {ALL_PRODUCTS_LABEL}
+          </Link>
+        </div>
         {products.length === 0 ? (
           <EmptyState
             icon="🧸"

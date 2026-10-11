@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { HEADER_NAV_LINKS } from '@/src/lib/catalog';
 import { useMounted } from '@/src/lib/useMounted';
 import type { SessionUser } from '@/src/lib/auth/session';
 import { selectTotalItems, useCartStore } from '@/src/store/useCartStore';
@@ -17,10 +18,9 @@ import { SEARCH_OPEN_EVENT } from '@/src/lib/searchEvents';
  * state (the persisted cart count, the logout request) lives here.
  */
 
-const NAV_LINKS = [
-  { href: '/categories', label: 'دسته‌بندی‌ها' },
-  { href: '/about', label: 'درباره ما' },
-];
+// The primary navigation lives in src/lib/catalog.ts: the catalog link has to be
+// reachable from the header, the footer and the home page, and three copies of a
+// link list is three chances for one of them to go stale.
 
 const LINK_CLASS =
   'rounded-md px-3 py-2 text-sm font-bold text-ink/70 transition hover:bg-cream-100 hover:text-ink';
@@ -73,10 +73,7 @@ export default function HeaderBar({ user }: { user: SessionUser | null }) {
         </Link>
 
         <nav aria-label="ناوبری اصلی" className="hidden items-center gap-1 md:flex">
-          <Link href="/" className={LINK_CLASS}>
-            خانه
-          </Link>
-          {NAV_LINKS.map((link) => (
+          {HEADER_NAV_LINKS.map((link) => (
             <Link key={link.href} href={link.href} className={LINK_CLASS}>
               {link.label}
             </Link>

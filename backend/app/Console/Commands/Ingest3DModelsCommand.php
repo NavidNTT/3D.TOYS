@@ -2,6 +2,7 @@
 
 namespace App\Console\Commands;
 
+use App\Models\Category;
 use App\Models\Product;
 use App\Models\ProductMedia3D;
 use App\Support\Currency;
@@ -28,6 +29,12 @@ use RuntimeException;
  *  - **Verifiable.** Every uploaded object is read back from the bucket and
  *    re-hashed; the run fails if the stored bytes differ from the local source,
  *    so "the upload returned 200" is never mistaken for "the object is intact".
+ *  - **Categorised.** Each manifest entry names a category slug from
+ *    config/catalog.php, so a fixture lands on a shelf the storefront can
+ *    actually navigate to instead of being reachable only by its direct URL.
+ *    An unknown slug fails the run: a product whose category does not exist is
+ *    invisible to `/categories/{slug}`, which is the whole discovery path.
+ *
  *  - **Money-safe.** A new product gets no invented price. `price` is NULL with
  *    currency `IRT`, which is exactly the state the storefront renders as an
  *    unavailable price: the row exists, it is visible, and it cannot be bought
@@ -98,6 +105,17 @@ class Ingest3DModelsCommand extends Command
             return self::FAILURE;
         }
 
+        // Checked before anything is uploaded: a manifest that names a category
+        // the taxonomy does not define is a data error, and the run should stop
+        // before it has written objects for half the tree.
+        try {
+            $this->assertTaxonomyCovers($entries);
+        } catch (RuntimeException $e) {
+            $this->error($e->getMessage());
+
+            return self::FAILURE;
+        }
+
         $disk = Storage::disk($diskName);
 
         $this->line(sprintf(
@@ -149,11 +167,11 @@ class Ingest3DModelsCommand extends Command
     /**
      * The manifest, i.e. the fixture → product map the run follows.
      *
-     * @return list<array{slug: string, title: string, sku: string, description: string, sources: array<string, string>, optimized?: array<string, string>}>
+     * @return list<array{slug: string, title: string, sku: string, category?: string|null, description: string, sources: array<string, string>, optimized?: array<string, string>}>
      */
     private function entries(): array
     {
-        /** @var array<int, array{slug: string, title: string, sku: string, description: string, sources: array<string, string>, optimized?: array<string, string>}> $entries */
+        /** @var array<int, array{slug: string, title: string, sku: string, category?: string|null, description: string, sources: array<string, string>, optimized?: array<string, string>}> $entries */
         $entries = (array) config('media_ingest.entries', []);
 
         return array_values($entries);
@@ -172,7 +190,7 @@ class Ingest3DModelsCommand extends Command
     /**
      * Upload one manifest entry and map it to its product.
      *
-     * @param  array{slug: string, title: string, sku: string, description: string, sources: array<string, string>, optimized?: array<string, string>}  $entry
+     * @param  array{slug: string, title: string, sku: string, category?: string|null, description: string, sources: array<string, string>, optimized?: array<string, string>}  $entry
      * @return array{file: string, key: string, size: int, sha256: string, product: string}
      */
     private function ingestEntry(array $entry, string $source, Filesystem $disk, bool $dryRun): array
@@ -317,18 +335,17 @@ class Ingest3DModelsCommand extends Command
      * what makes `purchasable` false on the API. No legacy amount is read here,
      * and no rate is applied.
      *
-     * @param  array{slug: string, title: string, sku: string, description: string}  $entry
+     * @param  array{slug: string, title: string, sku: string, category?: string|null, description: string}  $entry
      */
     private function writeProductRow(array $entry): Product
     {
         return Product::query()->updateOrCreate(
             ['slug' => $entry['slug']],
             [
-                // No category: the existing taxonomy (bath toys, blocks,
-                // figures, RC) does not describe a model car or a blaster, and
-                // inventing categories is a merchandising decision, not an
-                // ingestion step.
-                'category_id' => null,
+                // The manifest is the authority on which shelf a fixture
+                // belongs to (see config/media_ingest.php); re-running restores
+                // it, which is what makes the mapping reproducible.
+                'category_id' => $this->categoryId($entry['category'] ?? null),
                 'title' => $entry['title'],
                 'sku' => $entry['sku'],
                 'description' => $entry['description'],
@@ -340,6 +357,87 @@ class Ingest3DModelsCommand extends Command
                 'attributes' => ['Format' => 'GLB'],
             ],
         );
+    }
+
+    /**
+     * Refuse to run while a manifest entry names an unknown category.
+     *
+     * @param  list<array{slug: string, category?: string|null}>  $entries
+     */
+    private function assertTaxonomyCovers(array $entries): void
+    {
+        foreach ($entries as $entry) {
+            $slug = $entry['category'] ?? null;
+
+            if (($slug === null || trim($slug) === '') || $this->taxonomyDefinition($slug) !== null) {
+                continue;
+            }
+
+            throw new RuntimeException(sprintf(
+                'Manifest entry [%s] names category [%s], which config/catalog.php does not define. '
+                .'Add the category to the taxonomy, or fix the manifest.',
+                $entry['slug'],
+                $slug,
+            ));
+        }
+    }
+
+    /**
+     * The taxonomy definition for a slug, or null when it is not in the taxonomy.
+     *
+     * @return array{slug: string, name: string, description?: string|null, theme_config?: array<string, mixed>|null}|null
+     */
+    private function taxonomyDefinition(string $slug): ?array
+    {
+        /** @var list<array{slug: string, name: string, description?: string|null, theme_config?: array<string, mixed>|null}> $taxonomy */
+        $taxonomy = (array) config('catalog.categories', []);
+
+        foreach ($taxonomy as $category) {
+            if (($category['slug'] ?? null) === $slug) {
+                return $category;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Resolve the manifest's category slug to a category id.
+     *
+     * A product whose category does not exist is invisible to
+     * `/categories/{slug}` — the way the storefront is browsed — so an unknown
+     * slug stops the run instead of quietly publishing an unreachable row
+     * ({@see self::assertTaxonomyCovers()} catches it before any upload, and this
+     * method refuses again if it is ever reached some other way).
+     *
+     * A category the taxonomy declares but the database does not have yet (a
+     * fresh install that ingests before seeding) is created here, which is the
+     * same row the seeder would have written.
+     */
+    private function categoryId(?string $slug): ?int
+    {
+        if ($slug === null || trim($slug) === '') {
+            return null;
+        }
+
+        $definition = $this->taxonomyDefinition($slug);
+
+        if ($definition === null) {
+            throw new RuntimeException(
+                "Manifest entry names category [{$slug}], which config/catalog.php does not define."
+            );
+        }
+
+        $model = Category::query()->firstOrCreate(
+            ['slug' => $slug],
+            [
+                'name' => $definition['name'],
+                'description' => $definition['description'] ?? null,
+                'theme_config' => $definition['theme_config'] ?? null,
+            ],
+        );
+
+        return $model->id;
     }
 
     /**
