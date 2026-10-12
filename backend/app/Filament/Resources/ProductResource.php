@@ -63,22 +63,26 @@ class ProductResource extends Resource
                             ->preload()
                             ->nullable(),
                         TextInput::make('price')
-                            ->label('Price (Toman)')
+                            ->label('قیمت نهایی به تومان')
                             ->required()
                             ->numeric()
                             ->integer()
                             ->rule(new IrtAmount)
                             ->suffix('تومان')
                             ->minValue(0)
-                            ->helperText('مبلغ باید عدد صحیح و نامنفی به تومان باشد. قیمتهای قدیمی دلاری باید پیش از فروش به تومان نهایی شوند.'),
-                        // Only toman is sellable, so only toman is offered. This is
-                        // the guard that stops a new USD row being created: the
-                        // form cannot express "charge in dollars".
+                            ->helperText('عدد صحیح و نامنفی به تومان. همین مبلغ ذخیره و نمایش داده می‌شود و هیچ نرخ ارزی در محاسبه دخیل نیست. قیمتهای قدیمی دلاری باید پیش از فروش به تومان نهایی شوند.'),
+                        // Only toman is sellable, so only toman is offered — and
+                        // the value is validated against that list, not merely
+                        // drawn from it. A Filament `Select` renders its options
+                        // but does **not** reject a value that is not among them,
+                        // so without the `in` rule a crafted request could still
+                        // post `currency=USD` and create a dollar-priced row.
                         Select::make('currency')
                             ->label('Currency')
                             ->options([Currency::IRT => 'IRT — تومان'])
                             ->default(Currency::IRT)
                             ->required()
+                            ->rule('in:'.Currency::IRT)
                             ->selectablePlaceholder(false)
                             ->helperText('فقط تومان قابل فروش است. مبالغ قدیمی حفظ شده و در «قیمت قدیمی» نمایش داده میشوند.'),
                         // The preserved, pre-migration amount, shown verbatim while

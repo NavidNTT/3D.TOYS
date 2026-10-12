@@ -1,9 +1,5 @@
-'use client';
-
-import { useRef, useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
-import ModelPreview from '@/src/components/3d/ModelPreview';
 import { categoryPath } from '@/src/lib/catalog';
 import { resolveTheme } from '@/src/lib/theme';
 import type { Category } from '@/src/types/product';
@@ -11,39 +7,29 @@ import type { Category } from '@/src/types/product';
 /**
  * Showcase tile for `/categories`.
  *
- * The whole tile is a link; hovering it (after a short intent delay) fades the
- * poster out and reveals a lazily-mounted rotating model of a product in that
- * category. Only one tile's canvas is ever mounted at a time because the preview
- * is driven by that tile's own hover state.
+ * The whole tile is a link into the category's product list. It used to reveal a
+ * lazily-mounted rotating model of one product on hover (the shared
+ * `ModelPreview` canvas); that is gone, because the storefront's 3D viewer now
+ * lives only on a product's detail page. A category tile was the worst place for
+ * a canvas: it is a navigation control, and a live self-sizing element inside
+ * this `min-h` box could change the tile's height on hover.
+ *
+ * What remains is the poster when the representative product has one — with the
+ * category's own tint standing in when it does not, which reads as deliberate on
+ * a tinted tile — and a label that always says where the tile goes.
  */
 export default function CategoryTile({
   category,
-  modelUrl,
   posterUrl,
 }: {
   category: Category;
-  modelUrl: string | null;
   posterUrl: string | null;
 }) {
   const theme = resolveTheme(category.theme_config);
-  const [preview, setPreview] = useState(false);
-  const hoverTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const startPreview = () => {
-    if (!modelUrl) return;
-    hoverTimer.current = setTimeout(() => setPreview(true), 180);
-  };
-
-  const stopPreview = () => {
-    if (hoverTimer.current) clearTimeout(hoverTimer.current);
-    setPreview(false);
-  };
 
   return (
     <Link
       href={categoryPath(category.slug)}
-      onMouseEnter={startPreview}
-      onMouseLeave={stopPreview}
       className="group relative flex min-h-56 flex-col justify-end overflow-hidden rounded-xl border p-5 shadow-card transition duration-300 hover:-translate-y-1 hover:shadow-pop"
       style={{
         borderColor: `${theme.primary}33`,
@@ -56,16 +42,8 @@ export default function CategoryTile({
           alt=""
           fill
           sizes="(max-width: 640px) 100vw, 33vw"
-          className={`object-cover transition-opacity duration-500 ${
-            preview ? 'opacity-0' : 'opacity-40 group-hover:opacity-60'
-          }`}
+          className="object-cover opacity-40 transition-opacity duration-500 group-hover:opacity-60"
         />
-      )}
-
-      {preview && modelUrl && (
-        <div className="pointer-events-none absolute inset-0">
-          <ModelPreview modelUrl={modelUrl} className="absolute inset-0" />
-        </div>
       )}
 
       <div className="relative">
@@ -80,9 +58,7 @@ export default function CategoryTile({
         >
           {category.name}
         </span>
-        <span className="mt-1 block text-xs text-ink/60">
-          {modelUrl ? 'برای پیش‌نمایش سه‌بعدی نشانگر را نگه دارید' : 'مشاهده محصولات'}
-        </span>
+        <span className="mt-1 block text-xs text-ink/60">مشاهده محصولات</span>
       </div>
     </Link>
   );

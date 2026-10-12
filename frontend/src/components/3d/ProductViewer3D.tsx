@@ -3,11 +3,15 @@
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Image from 'next/image';
 import { Canvas } from '@react-three/fiber';
-import { Html, OrbitControls } from '@react-three/drei';
+import { Html, OrbitControls, PerspectiveCamera } from '@react-three/drei';
 import ModelLoadBoundary from './ModelLoadBoundary';
 import ToyModel, { DRACO_PATH, type ModelBounds } from './ToyModel';
 import ViewerLoader from './ViewerLoader';
-import CameraRig, { type OrbitControlsRef, type ViewerPreset } from './CameraRig';
+import CameraRig, {
+  viewerFraming,
+  type OrbitControlsRef,
+  type ViewerPreset,
+} from './CameraRig';
 
 /** A spatially-anchored annotation shown on the model. */
 export interface ViewerHotspot {
@@ -34,6 +38,15 @@ export interface ProductViewer3DProps {
 
 /** Persisted so the drag affordance is shown once per browser, not per visit. */
 const HINT_STORAGE_KEY = 'toys:viewer-hint-dismissed';
+
+/**
+ * Where the camera starts, before `CameraRig` animates it out to frame the
+ * model.
+ *
+ * Module-level on purpose: r3f diffs props by value, and a fresh array literal
+ * on every render would re-apply the position and fight the rig's transition.
+ */
+const CAMERA_START: [number, number, number] = [0, 0, 5];
 
 const PRESETS: { id: ViewerPreset; label: string }[] = [
   { id: 'front', label: 'جلو' },
@@ -81,6 +94,11 @@ export default function ProductViewer3D({
     if (typeof window !== 'undefined' && window.innerWidth < 640) return [1, 1.5];
     return [1, 2];
   }, []);
+
+  // The zoom bounds and the camera's clip range come from the same measured
+  // radius, so a model in centimetres and one in metres are both framed and
+  // both fully inside the frustum (`viewerFraming` explains why).
+  const framing = useMemo(() => viewerFraming(radius), [radius]);
 
   // Lazy mount: only build the canvas once it is (nearly) on screen.
   useEffect(() => {
@@ -176,9 +194,25 @@ export default function ProductViewer3D({
           className="absolute inset-0"
           dpr={dpr}
           gl={{ antialias: true, alpha: true }}
-          camera={{ position: [0, 0, 5], fov: 40 }}
           onPointerDown={dismissHint}
         >
+          {/* The camera is an element, not a `camera` prop, so its clip range can
+              follow the measured model size: r3f updates props in place on this
+              one camera object, whereas changing the `camera` prop makes it build
+              a brand-new camera — which `OrbitControls` and `CameraRig` would
+              then be pointing at a stale instance of. `near`/`far` come from the
+              same `viewerFraming` the zoom bounds use, which is what keeps an
+              asset authored ~1000× larger than the rest (the 9 mm pistol) inside
+              the frustum instead of silently clipped away by a far plane of
+              1000. */}
+          <PerspectiveCamera
+            makeDefault
+            position={CAMERA_START}
+            fov={40}
+            near={framing.near}
+            far={framing.far}
+          />
+
           <ambientLight intensity={0.9} />
           <directionalLight position={[4, 6, 5]} intensity={1.6} />
           <directionalLight position={[-5, 3, -4]} intensity={0.5} />
@@ -210,8 +244,8 @@ export default function ProductViewer3D({
             enableZoom
             enableDamping
             dampingFactor={0.08}
-            minDistance={Math.max(radius * 1.3, 0.4)}
-            maxDistance={Math.max(radius * 9, 6)}
+            minDistance={framing.minDistance}
+            maxDistance={framing.maxDistance}
             onStart={dismissHint}
           />
 

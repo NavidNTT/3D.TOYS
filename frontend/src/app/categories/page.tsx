@@ -62,7 +62,6 @@ export default async function CategoriesPage() {
               <li key={category.id}>
                 <CategoryTile
                   category={category}
-                  modelUrl={preview?.media_3d?.url ?? null}
                   posterUrl={preview?.media_3d?.thumbnail_url ?? null}
                 />
               </li>

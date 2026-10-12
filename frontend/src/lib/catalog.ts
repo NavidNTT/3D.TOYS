@@ -41,6 +41,15 @@ export const UNCATEGORISED_LABEL = 'بدون دسته‌بندی';
  */
 export const VIEW_MODEL_LABEL = 'مشاهده مدل سه‌بعدی';
 
+/**
+ * Badge on a card whose product has a 3D asset.
+ *
+ * It is a *signal*, not a viewer: the card advertises that a model exists so the
+ * visitor can follow the link to the detail page, and mounts nothing. The
+ * listing must not pay for geometry or a WebGL context on hover.
+ */
+export const HAS_MODEL_BADGE_LABEL = 'مدل سه‌بعدی دارد';
+
 /** Detail route for a product slug. */
 export function productPath(slug: string): string {
   return `${ALL_PRODUCTS_PATH}/${slug}`;

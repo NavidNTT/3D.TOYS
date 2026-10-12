@@ -15,8 +15,15 @@ use Laravel\Sanctum\HasApiTokens;
 /**
  * Application user.
  *
- * Authentication is passwordless: the phone number is the identity and access
- * is granted through Sanctum personal access tokens after an OTP challenge.
+ * Storefront authentication is passwordless: the phone number is the identity
+ * and access is granted through Sanctum personal access tokens after an OTP
+ * challenge. Nothing about that changes here.
+ *
+ * `email`/`password` exist for exactly one consumer — the Filament `/admin`
+ * panel, whose login page authenticates an email + password pair. They are
+ * nullable, are never read by the OTP flow, and `email` stays null for every
+ * customer. The panel is still gated separately by {@see self::canAccessPanel()},
+ * so holding a password is not what grants access: an administrator role is.
  */
 class User extends Authenticatable implements FilamentUser
 {
@@ -26,25 +33,39 @@ class User extends Authenticatable implements FilamentUser
     /**
      * The attributes that are mass assignable.
      *
+     * `email` is listed so an operator can seed or correct the panel login in
+     * one call; `password` is deliberately **not** mass assignable — it is set
+     * through the `hashed` cast on the attribute itself, so a stray
+     * `User::create($request->all())` can never choose the hash.
+     *
      * @var list<string>
      */
     protected $fillable = [
         'name',
         'phone',
+        'email',
         'role',
     ];
 
     /**
      * The attributes that should be hidden for serialization.
      *
+     * A hash and a remember-me token are never part of any API payload; the
+     * user resource is public-facing (see UserResource).
+     *
      * @var list<string>
      */
     protected $hidden = [
-        //
+        'password',
+        'remember_token',
     ];
 
     /**
      * Get the attributes that should be cast.
+     *
+     * `hashed` is what makes the panel password safe by construction: assigning
+     * a plaintext value (`$user->password = 'secret'`) stores a bcrypt hash, so
+     * no call site has to remember to hash, and none of them can forget.
      *
      * @return array<string, string>
      */
@@ -52,6 +73,7 @@ class User extends Authenticatable implements FilamentUser
     {
         return [
             'role' => UserRole::class,
+            'password' => 'hashed',
         ];
     }
 

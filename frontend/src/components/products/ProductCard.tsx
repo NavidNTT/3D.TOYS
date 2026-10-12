@@ -1,13 +1,14 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
-import ModelPreview from '@/src/components/3d/ModelPreview';
 import Badge from '@/src/components/ui/Badge';
+import MediaPlaceholder from '@/src/components/ui/MediaPlaceholder';
 import Price from '@/src/components/ui/Price';
 import {
   categoryLabel,
+  HAS_MODEL_BADGE_LABEL,
   has3DModel,
   productPath,
   VIEW_MODEL_LABEL,
@@ -19,16 +20,30 @@ import { isPurchasable, type Product } from '@/src/types/product';
 /**
  * Catalog card, shared by the home rails, category grids and search results.
  *
- * The 3D preview is opt-in: it mounts a small canvas only while the pointer is
- * over the card on a hover-capable device (after a short intent delay), or after
- * an explicit tap on the "3D" toggle on touch. A grid therefore never boots more
- * than the one canvas the user is actually looking at.
+ * **This card is deliberately 2D.** It used to mount a rotating WebGL preview of
+ * the product on hover (`ModelPreview`, a react-three-fiber `<Canvas>`), and two
+ * things went wrong with it:
+ *
+ *  1. The canvas is a live, self-sizing element — r3f writes its own
+ *     `position: relative; width/height: 100%` onto its wrapper and observes the
+ *     element with a ResizeObserver. Dropped into an `aspect-ratio` media box it
+ *     fed its own measurement back in as layout, so hovering a card on Windows
+ *     could grow the card's height without settling. The grid is a layout, not a
+ *     viewer, and it must have a height that depends only on its own width.
+ *  2. A listing should not pull megabytes of geometry (the cars are 17–21 MB)
+ *     and boot a WebGL context just because a pointer crossed a tile.
+ *
+ * The 3D viewer now lives only on the product detail page, reached through the
+ * explicit `مشاهده مدل سه‌بعدی` link below; the card advertises that a model
+ * exists with a badge and never loads one. Nothing in this component's tree
+ * imports a canvas, a loader, or a model URL.
  *
  * Discovery is explicit too. Every route on this card — poster, title and the
- * labelled "مشاهده مدل سه‌بعدی" link — is built by src/lib/catalog.ts from the
- * product slug, so a card can only point at the route the API itself resolves.
- * A product with no category says so (`بدون دسته‌بندی`) instead of leaving a
- * silent gap where every other card has a badge.
+ * labelled model link — is built by src/lib/catalog.ts from the product slug, so
+ * a card can only point at the route the API itself resolves. A product with no
+ * category says so (`بدون دسته‌بندی`) instead of leaving a silent gap where every
+ * other card has a badge, and a product with no picture gets a labelled neutral
+ * placeholder rather than a stand-in image of some other toy.
  */
 export default function ProductCard({ product }: { product: Product }) {
   const addItem = useCartStore((state) => state.addItem);
@@ -36,25 +51,12 @@ export default function ProductCard({ product }: { product: Product }) {
 
   const poster = product.media_3d?.thumbnail_url ?? null;
   const hasModel = has3DModel(product);
-  const modelUrl = product.media_3d?.url ?? null;
   const inStock = product.stock > 0;
   // Distinct from `inStock`: the row exists and may be in stock, but has no
   // toman amount yet, so it cannot be sold at any price.
   const purchasable = isPurchasable(product);
 
-  const [preview, setPreview] = useState(false);
   const [added, setAdded] = useState(false);
-  const hoverTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const startPreview = () => {
-    if (!modelUrl) return;
-    hoverTimer.current = setTimeout(() => setPreview(true), 180);
-  };
-
-  const stopPreview = () => {
-    if (hoverTimer.current) clearTimeout(hoverTimer.current);
-    setPreview(false);
-  };
 
   const quickAdd = () => {
     // `addItem` refuses a product with no toman amount, so only claim success
@@ -64,43 +66,32 @@ export default function ProductCard({ product }: { product: Product }) {
 
   return (
     <article className="group relative flex flex-col overflow-hidden rounded-lg bg-surface shadow-card transition duration-300 hover:-translate-y-1 hover:shadow-pop">
-      <div
-        className="relative aspect-square bg-cream-100"
-        onMouseEnter={startPreview}
-        onMouseLeave={stopPreview}
-      >
-        <Link href={productPath(product.slug)} aria-label={product.title}>
+      {/* Height is owned by this box alone: it is exactly as tall as it is wide,
+          it clips its children, and no child can report a height back up. Any
+          hover animation below is transform/opacity only. */}
+      <div className="relative aspect-square overflow-hidden bg-cream-100">
+        <Link
+          href={productPath(product.slug)}
+          aria-label={product.title}
+          className="absolute inset-0 block"
+        >
           {poster ? (
             <Image
               src={poster}
               alt={product.media_3d?.alt_text ?? product.title}
               fill
               sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
-              className={`object-cover transition-opacity duration-300 ${
-                preview ? 'opacity-0' : 'opacity-100'
-              }`}
+              className="object-cover"
             />
           ) : (
-            <span className="grid h-full w-full place-items-center text-3xl">
-              🧸
-            </span>
+            <MediaPlaceholder />
           )}
         </Link>
 
-        {preview && modelUrl && (
-          <ModelPreview modelUrl={modelUrl} className="absolute inset-0" />
-        )}
-
         {hasModel && (
-          <button
-            type="button"
-            onClick={() => setPreview((value) => !value)}
-            aria-pressed={preview}
-            aria-label={preview ? 'بستن نمای سه‌بعدی' : 'نمایش سه‌بعدی'}
-            className="absolute top-2 end-2 rounded-full bg-surface/90 px-2.5 py-1 text-[11px] font-bold text-ink/80 shadow-card backdrop-blur transition hover:bg-surface"
-          >
-            ۳D
-          </button>
+          <span className="pointer-events-none absolute top-2 end-2 rounded-full bg-ink/80 px-2.5 py-1 text-[11px] font-bold text-cream-50">
+            {HAS_MODEL_BADGE_LABEL}
+          </span>
         )}
 
         {/* A pricing problem outranks a stock one: a product with no toman

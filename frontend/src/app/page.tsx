@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import CategoryStrip from '@/src/components/home/CategoryStrip';
-import FeaturedModelHero from '@/src/components/home/FeaturedModelHero';
+import FeaturedProductHero from '@/src/components/home/FeaturedProductHero';
 import ProductCard from '@/src/components/products/ProductCard';
 import Container from '@/src/components/ui/Container';
 import EmptyState from '@/src/components/ui/EmptyState';
@@ -115,10 +115,9 @@ export default async function HomePage() {
           </div>
         </div>
 
-        <FeaturedModelHero
-          modelUrl={featured?.media_3d?.url ?? null}
+        <FeaturedProductHero
           posterUrl={featured?.media_3d?.thumbnail_url ?? null}
-          alt={featured?.title ?? 'مدل سه‌بعدی اسباب‌بازی'}
+          alt={featured?.title ?? 'اسباب‌بازی ویژه'}
           accentColor={featuredTheme.glow}
         />
       </section>
