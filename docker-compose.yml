@@ -389,7 +389,7 @@ services:
           echo '→ installing frontend dependencies…';
           npm install --no-audit --no-fund;
         fi;
-        exec npm run dev -- --hostname 0.0.0.0 --port 3000
+        exec npm run dev -- --webpack --hostname 0.0.0.0 --port 3000
     environment:
       NODE_ENV: development
       NEXT_TELEMETRY_DISABLED: "1"
@@ -398,7 +398,7 @@ services:
       # Browser-side (host) URLs…
       NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000/api}
       NEXT_PUBLIC_MINIO_URL: ${NEXT_PUBLIC_MINIO_URL:-http://localhost:9000}
-      NEXT_PUBLIC_MINIO_CONSOLE_URL: ${NEXT_PUBLIC_MINIO_CONSOLE_URL:-http://localhost:9001}
+      NEXT_PUBLIC_MINIO_CONSOLE_URL: ${NEXT_PUBLIC_MINIO_CONSOLE_URL:-http://localhost:9002}
       # …and the internal address used by server components / route handlers,
       # which run inside this container and must not loop back through the host.
       LARAVEL_INTERNAL_URL: ${LARAVEL_INTERNAL_URL:-http://nginx}
