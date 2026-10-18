@@ -13,7 +13,7 @@ export default function ProductNotFound() {
         action={
           <Link
             href="/"
-            className="rounded-md bg-brand-500 px-5 py-3 text-sm font-bold text-white shadow-card transition hover:bg-brand-600"
+            className="rounded-full bg-brand-500 px-5 py-3 text-sm font-bold text-white shadow-card transition hover:bg-brand-600 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-500"
           >
             بازگشت به خانه
           </Link>

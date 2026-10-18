@@ -26,6 +26,26 @@
   --color-toy-lime: #C7EF63;
   --color-toy-lavender: #DCD5FF;
 
+  /* Accent variants (hover / small-text states of the toy palette) */
+  --color-toy-orange-deep: #F07845;
+  --color-toy-lime-deep: #B6E64A;
+
+  /* Warm neutral text ramp (olive-tinted grays descending from --color-ink) */
+  --color-graphite-500: #77776F;
+  --color-graphite-600: #66665F;
+  --color-graphite-700: #55564F;
+  --color-graphite-800: #33342F;
+  --color-graphite-900: #25281E;
+
+  /* Soft chip tints (trust badges and icon chips) */
+  --color-tint-blue: #E2EAFF;
+  --color-tint-orange: #FFE3D6;
+  --color-tint-lime: #E8F5C9;
+
+  /* Featured-product studio stage */
+  --color-stage-blue: #E2E8F5;
+  --color-stage-ink: #353F57;
+
   /* Typography */
   --font-body: var(--font-vazirmatn), 'Vazirmatn', ui-sans-serif,
     system-ui, sans-serif;
@@ -86,8 +106,8 @@ body {
 }
 
 ::selection {
-  background-color: #C7EF63;
-  color: #22231F;
+  background-color: var(--color-toy-lime);
+  color: var(--color-ink);
 }
 
 /* Persian prices and quantities */

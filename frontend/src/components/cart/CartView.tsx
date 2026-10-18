@@ -5,9 +5,11 @@ import Image from 'next/image';
 import Link from 'next/link';
 import Button from '@/src/components/ui/Button';
 import Card from '@/src/components/ui/Card';
+import EmptyState from '@/src/components/ui/EmptyState';
+import MediaPlaceholder from '@/src/components/ui/MediaPlaceholder';
 import Price from '@/src/components/ui/Price';
 import Skeleton from '@/src/components/ui/Skeleton';
-import { CURRENCY_IRT } from '@/src/lib/format';
+import { CURRENCY_IRT, formatNumberFa } from '@/src/lib/format';
 import { useCartStore } from '@/src/store/useCartStore';
 import type { CartQuote } from '@/src/services/cartQuote';
 
@@ -76,29 +78,59 @@ export default function CartView() {
 
   if (items.length === 0) {
     return (
-      <Card className="p-10 text-center">
-        <p className="text-4xl">🛒</p>
-        <h1 className="mt-4 font-display text-2xl text-ink">سبد خرید شما خالی است</h1>
-        <p className="mt-2 text-sm text-ink/60">
-          هنوز چیزی به سبد اضافه نکرده‌اید. از دسته‌بندی‌ها شروع کنید.
-        </p>
-        <Link
-          href="/categories"
-          className="mt-6 inline-block rounded-md bg-brand-500 px-5 py-3 text-sm font-bold text-white shadow-card transition hover:bg-brand-600"
-        >
-          مشاهده دسته‌بندی‌ها
-        </Link>
-      </Card>
+      <EmptyState
+        icon="🛒"
+        title="سبد خرید شما خالی است"
+        description="هنوز چیزی به سبد اضافه نکرده‌اید. از قفسه‌ها شروع کنید و اسباب‌بازی موردعلاقه‌تان را پیدا کنید."
+        action={
+          <div className="flex flex-col items-center gap-3 sm:flex-row">
+            <Link
+              href="/categories"
+              className="inline-flex items-center rounded-full bg-brand-500 px-6 py-3 text-sm font-bold text-white shadow-card transition hover:-translate-y-0.5 hover:bg-brand-600 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600"
+            >
+              مشاهده دسته‌بندی‌ها
+            </Link>
+            <Link
+              href="/products"
+              className="inline-flex items-center rounded-full border border-ink/15 bg-surface px-6 py-3 text-sm font-bold text-ink/80 transition hover:-translate-y-0.5 hover:bg-cream-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-500"
+            >
+              همه محصولات
+            </Link>
+          </div>
+        }
+      />
     );
   }
 
   if (loading && quote === null) {
     return (
-      <div className="space-y-4" aria-busy="true" aria-live="polite">
+      <div
+        className="grid gap-6 lg:grid-cols-3 lg:items-start"
+        aria-busy="true"
+        aria-live="polite"
+      >
         <span className="sr-only">در حال دریافت قیمت سبد خرید</span>
-        {[0, 1, 2].map((row) => (
-          <Skeleton key={row} className="h-24 w-full rounded-lg" />
-        ))}
+        <div className="space-y-4 lg:col-span-2">
+          {[0, 1, 2].map((row) => (
+            <div
+              key={row}
+              className="flex items-center gap-4 rounded-lg bg-surface p-4 shadow-card"
+            >
+              <Skeleton className="h-20 w-20 shrink-0 rounded-md" />
+              <div className="flex-1 space-y-2">
+                <Skeleton className="h-4 w-2/3 rounded-full" />
+                <Skeleton className="h-3 w-1/3 rounded-full" />
+              </div>
+              <Skeleton className="h-10 w-28 shrink-0 rounded-full" />
+            </div>
+          ))}
+        </div>
+        <div className="space-y-4 rounded-lg bg-surface p-5 shadow-card lg:col-span-1">
+          <Skeleton className="h-6 w-1/3 rounded-full" />
+          <Skeleton className="h-4 w-full rounded-full" />
+          <Skeleton className="h-4 w-full rounded-full" />
+          <Skeleton className="h-11 w-full rounded-lg" />
+        </div>
       </div>
     );
   }
@@ -127,25 +159,30 @@ export default function CartView() {
   );
 
   return (
-    <div className="grid gap-6 lg:grid-cols-3">
+    <div className="grid gap-6 lg:grid-cols-3 lg:items-start">
       <div className="space-y-4 lg:col-span-2">
         {unpricedItems.length > 0 && (
-          <Card className="border border-amber-300/60 bg-amber-50 p-4">
-            <p className="text-sm font-bold text-amber-900">
+          <Card className="border border-toy-orange/40 bg-tint-orange/60 p-5">
+            <p className="flex items-start gap-2 text-sm font-bold text-graphite-900">
+              <span aria-hidden className="text-base leading-5">
+                ⚠️
+              </span>
               برخی اقلام دیگر در دسترس نیستند یا قیمت تومانی نهایی ندارند و قابل
               محاسبه نیستند.
             </p>
-            <ul className="mt-2 space-y-1 text-sm text-amber-900/80">
+            <ul className="mt-3 space-y-1.5 text-sm text-graphite-700">
               {unpricedItems.map((item) => (
                 <li
                   key={item.productId}
-                  className="flex items-center justify-between gap-3"
+                  className="flex items-center justify-between gap-3 rounded-md bg-surface/70 px-3 py-2"
                 >
-                  <span className="truncate">{item.slug}</span>
+                  <span className="truncate" dir="auto">
+                    {item.slug}
+                  </span>
                   <button
                     type="button"
                     onClick={() => removeItem(item.productId)}
-                    className="shrink-0 font-bold underline"
+                    className="shrink-0 rounded-full px-2 font-bold text-red-600 underline-offset-2 transition hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-600"
                   >
                     حذف
                   </button>
@@ -155,104 +192,123 @@ export default function CartView() {
           </Card>
         )}
 
-        {quote.lines.map((line) => {
-          const quantity = line.quantity;
+        <ul className="space-y-4">
+          {quote.lines.map((line) => {
+            const quantity = line.quantity;
+            const atMax = quantity >= Math.min(line.product.stock, 99);
 
-          return (
-            <Card key={line.product.id} className="flex flex-wrap items-center gap-4 p-4">
-              <div className="relative h-20 w-20 shrink-0 overflow-hidden rounded-md bg-cream-100">
-                {line.product.media_3d?.thumbnail_url ? (
-                  <Image
-                    src={line.product.media_3d.thumbnail_url}
-                    alt={line.product.title}
-                    fill
-                    sizes="80px"
-                    className="object-cover"
-                  />
-                ) : (
-                  <span className="grid h-full w-full place-items-center text-2xl">
-                    🧸
-                  </span>
-                )}
-              </div>
+            return (
+              <li key={line.product.id}>
+                <Card className="p-4 transition hover:shadow-pop sm:p-5">
+                  <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
+                    {/* PRODUCT IMAGE — poster or the honest neutral placeholder. */}
+                    <div className="relative h-20 w-20 shrink-0 overflow-hidden rounded-md bg-cream-100 ring-1 ring-ink/5">
+                      {line.product.media_3d?.thumbnail_url ? (
+                        <Image
+                          src={line.product.media_3d.thumbnail_url}
+                          alt={line.product.title}
+                          fill
+                          sizes="80px"
+                          className="object-cover"
+                        />
+                      ) : (
+                        <MediaPlaceholder label="بدون تصویر" />
+                      )}
+                    </div>
 
-              <div className="min-w-0 flex-1">
-                <Link
-                  href={`/products/${line.product.slug}`}
-                  className="line-clamp-2 font-bold text-ink hover:underline"
-                >
-                  {line.product.title}
-                </Link>
-                <div className="mt-1">
-                  <Price
-                    value={line.product.price}
-                    currency={line.product.currency}
-                    size="sm"
-                  />
-                </div>
-              </div>
+                    {/* IDENTITY — title and the server-priced unit amount. */}
+                    <div className="min-w-0 flex-1">
+                      <Link
+                        href={`/products/${line.product.slug}`}
+                        className="line-clamp-2 font-bold text-ink transition hover:text-brand-600 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-500"
+                      >
+                        {line.product.title}
+                      </Link>
+                      <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1">
+                        <span className="text-xs text-graphite-500">قیمت واحد</span>
+                        <Price
+                          value={line.product.price}
+                          currency={line.product.currency}
+                          size="sm"
+                        />
+                      </div>
+                    </div>
 
-              <div
-                className="flex items-center rounded-md border border-ink/15 bg-surface"
-                role="group"
-                aria-label={`تعداد ${line.product.title}`}
-              >
-                <button
-                  type="button"
-                  onClick={() =>
-                    updateQuantity(line.product.id, Math.max(0, quantity - 1))
-                  }
-                  aria-label="کاهش تعداد"
-                  className="grid h-9 w-9 place-items-center font-bold text-ink/70 hover:bg-cream-100"
-                >
-                  −
-                </button>
-                <output className="tnum w-9 text-center text-sm font-bold">
-                  {quantity}
-                </output>
-                <button
-                  type="button"
-                  onClick={() => updateQuantity(line.product.id, quantity + 1)}
-                  disabled={quantity >= Math.min(line.product.stock, 99)}
-                  aria-label="افزایش تعداد"
-                  className="grid h-9 w-9 place-items-center font-bold text-ink/70 hover:bg-cream-100 disabled:opacity-40"
-                >
-                  +
-                </button>
-              </div>
+                    {/* CONTROLS — quantity, line total and removal, grouped so
+                        they stay reachable as one row on a phone. */}
+                    <div className="flex items-center justify-between gap-3 sm:justify-end sm:gap-5">
+                      <div
+                        className="flex items-center overflow-hidden rounded-full border border-ink/15 bg-cream-50"
+                        role="group"
+                        aria-label={`تعداد ${line.product.title}`}
+                      >
+                        <button
+                          type="button"
+                          onClick={() =>
+                            updateQuantity(line.product.id, Math.max(0, quantity - 1))
+                          }
+                          aria-label="کاهش تعداد"
+                          className="grid h-11 w-11 place-items-center text-lg font-bold text-ink/70 transition hover:bg-cream-100 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-brand-500"
+                        >
+                          −
+                        </button>
+                        <output className="tnum w-10 text-center text-sm font-bold text-ink">
+                          {quantity}
+                        </output>
+                        <button
+                          type="button"
+                          onClick={() => updateQuantity(line.product.id, quantity + 1)}
+                          disabled={atMax}
+                          aria-label="افزایش تعداد"
+                          className="grid h-11 w-11 place-items-center text-lg font-bold text-ink/70 transition hover:bg-cream-100 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-brand-500 disabled:cursor-not-allowed disabled:opacity-40"
+                        >
+                          +
+                        </button>
+                      </div>
 
-              <div className="w-32 text-end">
-                {/* A line total exists only for a priced line, and every priced
-                    line is toman by construction. */}
-                <Price value={line.lineTotal} currency={CURRENCY_IRT} size="md" />
-              </div>
+                      <div className="min-w-[6rem] text-end">
+                        {/* A line total exists only for a priced line, and every
+                            priced line is toman by construction. */}
+                        <Price
+                          value={line.lineTotal}
+                          currency={CURRENCY_IRT}
+                          size="md"
+                        />
+                      </div>
 
-              <button
-                type="button"
-                onClick={() => removeItem(line.product.id)}
-                aria-label={`حذف ${line.product.title} از سبد`}
-                className="text-sm font-bold text-red-600 hover:underline"
-              >
-                حذف
-              </button>
-            </Card>
-          );
-        })}
+                      <button
+                        type="button"
+                        onClick={() => removeItem(line.product.id)}
+                        aria-label={`حذف ${line.product.title} از سبد`}
+                        className="inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-1.5 text-sm font-bold text-red-600 transition hover:bg-red-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-600"
+                      >
+                        <span aria-hidden>🗑</span>
+                        حذف
+                      </button>
+                    </div>
+                  </div>
+                </Card>
+              </li>
+            );
+          })}
+        </ul>
       </div>
 
-      <aside>
-        <Card className="space-y-4 p-5">
+      <aside className="lg:sticky lg:top-20">
+        <Card className="space-y-5 p-5 sm:p-6">
           <h2 className="font-display text-xl text-ink">خلاصه سفارش</h2>
 
-          <dl className="space-y-2 text-sm">
-            <div className="flex justify-between">
-              <dt className="text-ink/60">تعداد کالا</dt>
-              <dd className="tnum font-bold">{quote.totalItems}</dd>
+          <dl className="space-y-3 text-sm">
+            <div className="flex items-center justify-between">
+              <dt className="text-graphite-600">تعداد کالا</dt>
+              <dd className="tnum font-bold text-ink">
+                {formatNumberFa(quote.totalItems)} قلم
+              </dd>
             </div>
-            <div className="flex justify-between">
-              <dt className="text-ink/60">جمع کل</dt>
+            <div className="flex items-center justify-between border-t border-ink/10 pt-3">
+              <dt className="font-bold text-ink">جمع کل</dt>
               <dd>
-                <Price value={quote.subtotal} currency={CURRENCY_IRT} size="md" />
+                <Price value={quote.subtotal} currency={CURRENCY_IRT} size="lg" />
               </dd>
             </div>
           </dl>
@@ -260,10 +316,10 @@ export default function CartView() {
           <Link
             href={quote.lines.length > 0 ? '/checkout' : '/cart'}
             aria-disabled={quote.lines.length === 0}
-            className={`block rounded-md px-5 py-3 text-center text-sm font-bold shadow-card transition ${
+            className={`block rounded-full px-5 py-3.5 text-center text-sm font-bold shadow-card transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600 ${
               quote.lines.length > 0
-                ? 'bg-brand-500 text-white hover:bg-brand-600'
-                : 'pointer-events-none bg-ink/20 text-ink/50'
+                ? 'bg-brand-500 text-white hover:-translate-y-0.5 hover:bg-brand-600'
+                : 'pointer-events-none bg-ink/15 text-ink/45'
             }`}
           >
             تکمیل خرید
@@ -271,10 +327,28 @@ export default function CartView() {
 
           <Link
             href="/categories"
-            className="block text-center text-sm font-bold text-ink/70 hover:text-ink"
+            className="block text-center text-sm font-bold text-graphite-600 transition hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-500"
           >
             ادامه خرید
           </Link>
+
+          {/* Plain, true statements about the flow — nothing invented. */}
+          <ul className="space-y-1.5 border-t border-ink/10 pt-4 text-xs text-graphite-600">
+            <li className="flex items-center gap-2">
+              <span aria-hidden>🧾</span>
+              سفارش شما ثبت می‌شود؛ پرداخت آنلاین هنوز فعال نشده و پس از ثبت
+              هماهنگ می‌شود.
+            </li>
+            <li className="flex items-center gap-2">
+              <span aria-hidden>🔄</span>
+              <Link
+                href="/returns"
+                className="font-bold text-graphite-700 underline-offset-4 transition hover:text-ink hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-500"
+              >
+                قوانین و بازگشت کالا
+              </Link>
+            </li>
+          </ul>
         </Card>
       </aside>
     </div>
