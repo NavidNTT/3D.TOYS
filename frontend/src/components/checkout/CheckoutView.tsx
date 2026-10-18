@@ -1,9 +1,11 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import Button from '@/src/components/ui/Button';
 import Card from '@/src/components/ui/Card';
+import EmptyState from '@/src/components/ui/EmptyState';
 import Input from '@/src/components/ui/Input';
 import Price from '@/src/components/ui/Price';
 import Skeleton from '@/src/components/ui/Skeleton';
@@ -214,12 +216,31 @@ export default function CheckoutView({ user }: { user: SessionUser }) {
 
   if (loading) {
     return (
-      <div className="grid gap-6 lg:grid-cols-3" aria-busy="true" aria-live="polite">
+      <div
+        className="grid gap-6 lg:grid-cols-3 lg:items-start"
+        aria-busy="true"
+        aria-live="polite"
+      >
         <span className="sr-only">در حال آماده‌سازی سفارش</span>
-        <div className="space-y-4 lg:col-span-2">
-          <Skeleton className="h-64 w-full rounded-lg" />
+        <div className="space-y-5 lg:col-span-2">
+          <div className="space-y-4 rounded-lg bg-surface p-5 shadow-card">
+            <Skeleton className="h-6 w-1/3 rounded-full" />
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Skeleton className="h-11 w-full rounded-lg" />
+              <Skeleton className="h-11 w-full rounded-lg" />
+              <Skeleton className="h-11 w-full rounded-lg" />
+              <Skeleton className="h-11 w-full rounded-lg" />
+            </div>
+            <Skeleton className="h-24 w-full rounded-lg" />
+          </div>
+          <Skeleton className="h-28 w-full rounded-lg" />
         </div>
-        <Skeleton className="h-64 w-full rounded-lg" />
+        <div className="space-y-4 rounded-lg bg-surface p-5 shadow-card lg:col-span-1">
+          <Skeleton className="h-6 w-1/3 rounded-full" />
+          <Skeleton className="h-4 w-full rounded-full" />
+          <Skeleton className="h-4 w-2/3 rounded-full" />
+          <Skeleton className="h-11 w-full rounded-lg" />
+        </div>
       </div>
     );
   }
@@ -236,53 +257,74 @@ export default function CheckoutView({ user }: { user: SessionUser }) {
     ];
 
     return (
-      <Card className="p-10 text-center">
-        <p className="text-4xl">⚠️</p>
-        <h1 className="mt-4 font-display text-2xl text-ink">
-          امکان ثبت سفارش نیست
-        </h1>
-        <p className="mt-2 text-sm font-bold text-red-700" role="alert">
-          {BLOCKED_SUMMARY}
-        </p>
-        <ul className="mx-auto mt-3 max-w-md space-y-1 text-sm text-ink/70">
-          {unorderable.map((entry) => (
-            <li key={entry} className="truncate" dir="auto">
-              {entry}
-            </li>
-          ))}
-        </ul>
-        <a
-          href="/cart"
-          className="mt-6 inline-block rounded-md bg-brand-500 px-5 py-3 text-sm font-bold text-white shadow-card transition hover:bg-brand-600"
-        >
-          بازگشت به سبد خرید
-        </a>
+      <Card className="overflow-hidden">
+        <div
+          aria-hidden="true"
+          className="h-1.5 w-full bg-toy-orange"
+        />
+        <div className="px-6 py-10 text-center sm:px-10">
+          <p className="text-4xl">⚠️</p>
+          <h2 className="mt-4 font-display text-2xl text-ink">
+            امکان ثبت سفارش نیست
+          </h2>
+          <p
+            className="mx-auto mt-3 max-w-md rounded-md bg-red-50 px-4 py-3 text-sm font-bold text-red-700"
+            role="alert"
+          >
+            {BLOCKED_SUMMARY}
+          </p>
+          {unorderable.length > 0 && (
+            <ul className="mx-auto mt-4 max-w-md space-y-1.5 text-sm text-graphite-700">
+              {unorderable.map((entry) => (
+                <li
+                  key={entry}
+                  className="truncate rounded-md bg-cream-100 px-3 py-2"
+                  dir="auto"
+                >
+                  {entry}
+                </li>
+              ))}
+            </ul>
+          )}
+          <Link
+            href="/cart"
+            className="mt-6 inline-flex items-center rounded-full bg-brand-500 px-6 py-3 text-sm font-bold text-white shadow-card transition hover:-translate-y-0.5 hover:bg-brand-600 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600"
+          >
+            بازگشت به سبد خرید
+          </Link>
+        </div>
       </Card>
     );
   }
 
   if (quote === null || quote.lines.length === 0) {
     return (
-      <Card className="p-10 text-center">
-        <p className="text-4xl">🛒</p>
-        <h1 className="mt-4 font-display text-2xl text-ink">
-          چیزی برای سفارش نیست
-        </h1>
-        <p className="mt-2 text-sm text-ink/60">
-          سبد خرید شما خالی است؛ ابتدا چیزی به آن اضافه کنید.
-        </p>
-        <a
-          href="/cart"
-          className="mt-6 inline-block rounded-md bg-brand-500 px-5 py-3 text-sm font-bold text-white shadow-card transition hover:bg-brand-600"
-        >
-          بازگشت به سبد خرید
-        </a>
-      </Card>
+      <EmptyState
+        icon="🛒"
+        title="چیزی برای سفارش نیست"
+        description="سبد خرید شما خالی است؛ ابتدا چیزی به آن اضافه کنید تا بتوانید سفارش را ثبت کنید."
+        action={
+          <div className="flex flex-col items-center gap-3 sm:flex-row">
+            <Link
+              href="/cart"
+              className="inline-flex items-center rounded-full bg-brand-500 px-6 py-3 text-sm font-bold text-white shadow-card transition hover:-translate-y-0.5 hover:bg-brand-600 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600"
+            >
+              بازگشت به سبد خرید
+            </Link>
+            <Link
+              href="/products"
+              className="inline-flex items-center rounded-full border border-ink/15 bg-surface px-6 py-3 text-sm font-bold text-ink/80 transition hover:-translate-y-0.5 hover:bg-cream-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-500"
+            >
+              همه محصولات
+            </Link>
+          </div>
+        }
+      />
     );
   }
 
   return (
-    <div className="grid gap-6 lg:grid-cols-3">
+    <div className="grid gap-6 lg:grid-cols-3 lg:items-start">
       <form
         id="checkout-form"
         className="space-y-5 lg:col-span-2"
@@ -295,14 +337,30 @@ export default function CheckoutView({ user }: { user: SessionUser }) {
         {submitError && (
           <p
             role="alert"
-            className="rounded-md bg-red-50 px-4 py-3 text-sm font-bold text-red-700"
+            className="flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700"
           >
+            <span aria-hidden className="text-base leading-5">
+              ⚠️
+            </span>
             {submitError}
           </p>
         )}
 
-        <Card className="space-y-4 p-5">
-          <h2 className="font-display text-xl text-ink">نشانی تحویل</h2>
+        <Card className="space-y-5 p-5 sm:p-6">
+          <div className="flex items-center gap-3 border-b border-ink/10 pb-4">
+            <span
+              aria-hidden
+              className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-brand-50 text-base"
+            >
+              📍
+            </span>
+            <div>
+              <h2 className="font-display text-xl text-ink">نشانی تحویل</h2>
+              <p className="text-xs text-graphite-600">
+                اطلاعات گیرنده و نشانی دقیق را وارد کنید.
+              </p>
+            </div>
+          </div>
 
           <div className="grid gap-4 sm:grid-cols-2">
             <Input
@@ -378,14 +436,28 @@ export default function CheckoutView({ user }: { user: SessionUser }) {
           />
         </Card>
 
-        <Card className="space-y-3 p-5">
-          <h2 className="font-display text-xl text-ink">پرداخت</h2>
+        <Card className="space-y-4 p-5 sm:p-6">
+          <div className="flex items-center gap-3">
+            <span
+              aria-hidden
+              className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-tint-lime text-base"
+            >
+              💳
+            </span>
+            <h2 className="font-display text-xl text-ink">پرداخت</h2>
+          </div>
           {/* PLACEHOLDER — payments are out of scope for this engagement.
               This is the empty spot where the gateway step belongs; orders are
               created as `pending` and nothing is charged. */}
-          <div className="rounded-md border border-dashed border-ink/25 bg-cream-100 px-4 py-6 text-center">
-            <p className="text-sm font-bold text-ink/70">پرداخت آنلاین بهزودی</p>
-            <p className="mt-1 text-xs leading-5 text-ink/50">
+          <div className="rounded-lg border border-dashed border-ink/25 bg-cream-100 px-4 py-6 text-center">
+            <p className="inline-flex items-center gap-2 rounded-full bg-surface px-3 py-1 text-xs font-black text-graphite-600 shadow-card">
+              <span aria-hidden>⏳</span>
+              به‌زودی
+            </p>
+            <p className="mt-3 text-sm font-bold text-graphite-700">
+              پرداخت آنلاین هنوز فعال نشده است.
+            </p>
+            <p className="mt-1 text-xs leading-5 text-graphite-500">
               در حال حاضر سفارش شما ثبت می‌شود و پرداخت پس از هماهنگی با شما
               انجام خواهد شد.
             </p>
@@ -393,26 +465,36 @@ export default function CheckoutView({ user }: { user: SessionUser }) {
         </Card>
       </form>
 
-      <aside>
-        <Card className="space-y-4 p-5">
+      <aside className="lg:sticky lg:top-20">
+        <Card className="space-y-5 p-5 sm:p-6">
           <h2 className="font-display text-xl text-ink">خلاصه سفارش</h2>
 
           <ul className="space-y-3 text-sm">
             {quote.lines.map((line) => (
               <li
                 key={line.product.id}
-                className="flex items-start justify-between gap-3"
+                className="flex items-start justify-between gap-3 border-b border-ink/5 pb-3 last:border-b-0 last:pb-0"
               >
-                <span className="line-clamp-1 text-ink/70">
-                  {line.product.title} × {line.quantity}
+                <span className="min-w-0 flex-1 text-graphite-700">
+                  <span className="line-clamp-2 font-bold text-ink">
+                    {line.product.title}
+                  </span>
+                  <span className="tnum mt-0.5 block text-xs text-graphite-500">
+                    تعداد: {line.quantity}
+                  </span>
                 </span>
-                <Price value={line.lineTotal} currency={CURRENCY_IRT} size="sm" />
+                <Price
+                  value={line.lineTotal}
+                  currency={CURRENCY_IRT}
+                  size="sm"
+                  className="shrink-0"
+                />
               </li>
             ))}
           </ul>
 
-          <div className="flex items-center justify-between border-t border-ink/10 pt-3">
-            <span className="text-sm text-ink/60">جمع کل</span>
+          <div className="flex items-center justify-between gap-3 border-t border-ink/10 pt-4">
+            <span className="text-sm font-bold text-ink">جمع کل</span>
             <Price value={quote.subtotal} currency={CURRENCY_IRT} size="lg" />
           </div>
 
@@ -421,12 +503,12 @@ export default function CheckoutView({ user }: { user: SessionUser }) {
             form="checkout-form"
             size="lg"
             loading={submitting}
-            className="w-full"
+            className="w-full rounded-full"
           >
             ثبت سفارش
           </Button>
 
-          <p className="text-center text-xs text-ink/50">
+          <p className="text-center text-xs text-graphite-500">
             با ثبت سفارش، قوانین بازگشت کالا را می‌پذیرید.
           </p>
         </Card>
