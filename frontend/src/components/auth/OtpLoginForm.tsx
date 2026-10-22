@@ -105,94 +105,115 @@ export default function OtpLoginForm({ next }: { next: string }) {
   };
 
   return (
-    <Card className="mx-auto max-w-md space-y-5 p-6 sm:p-8">
-      <div className="space-y-1 text-center">
-        <h1 className="font-display text-2xl text-ink">ورود به حساب</h1>
-        <p className="text-sm text-ink/60">
-          {step === 'phone'
-            ? 'شماره موبایل خود را وارد کنید تا کد تأیید ارسال شود.'
-            : `کد پنج‌رقمی ارسال‌شده به ${phone} را وارد کنید.`}
-        </p>
-      </div>
+    <Card className="mx-auto max-w-md p-6 sm:p-8">
+      <div className="space-y-6">
+        <div className="space-y-3 text-center">
+          <span className="inline-flex items-center rounded-full bg-brand-50 px-3 py-1 text-xs font-black text-brand-600">
+            {step === 'phone' ? 'مرحله ۱ از ۲ — شماره موبایل' : 'مرحله ۲ از ۲ — کد تأیید'}
+          </span>
+          <h2 className="font-display text-2xl text-ink">
+            {step === 'phone' ? 'شماره موبایل خود را وارد کنید' : 'کد تأیید را وارد کنید'}
+          </h2>
+          <p className="text-sm leading-6 text-ink/60">
+            {step === 'phone'
+              ? 'برای ادامه، شماره موبایل حساب خود را وارد کنید تا کد تأیید برایتان پیامک شود.'
+              : `کد پنج‌رقمی ارسال‌شده به ${phone} را وارد کنید.`}
+          </p>
+        </div>
 
-      {notice && step === 'code' && (
-        <p role="status" className="rounded-md bg-emerald-50 px-3 py-2 text-center text-sm font-bold text-emerald-800">
-          {notice}
-        </p>
-      )}
-
-      {error && (
-        <p role="alert" className="rounded-md bg-red-50 px-3 py-2 text-center text-sm font-bold text-red-700">
-          {error}
-        </p>
-      )}
-
-      {step === 'phone' ? (
-        <form
-          className="space-y-4"
-          onSubmit={(event) => {
-            event.preventDefault();
-            void requestOtp();
-          }}
-        >
-          <Input
-            id="otp-phone"
-            label="شماره موبایل"
-            type="tel"
-            inputMode="numeric"
-            autoComplete="tel"
-            dir="ltr"
-            placeholder="09123456789"
-            value={phone}
-            onChange={(event) => setPhone(event.target.value)}
-            required
-          />
-
-          <Button type="submit" loading={busy} className="w-full">
-            ارسال کد تأیید
-          </Button>
-        </form>
-      ) : (
-        <form
-          className="space-y-4"
-          onSubmit={(event) => {
-            event.preventDefault();
-            void verifyOtp();
-          }}
-        >
-          <Input
-            id="otp-code"
-            label="کد تأیید"
-            type="text"
-            inputMode="numeric"
-            autoComplete="one-time-code"
-            dir="ltr"
-            maxLength={5}
-            placeholder="۱۲۳۴۵"
-            value={code}
-            onChange={(event) => setCode(event.target.value)}
-            required
-          />
-
-          <Button type="submit" loading={busy} className="w-full">
-            ورود
-          </Button>
-
-          <button
-            type="button"
-            onClick={() => {
-              setStep('phone');
-              setCode('');
-              setError(null);
-              setNotice(null);
-            }}
-            disabled={busy}
-            className="w-full text-sm font-bold text-ink/70 hover:text-ink disabled:opacity-50"
+        {notice && step === 'code' && (
+          <p
+            role="status"
+            className="flex items-start gap-2 rounded-lg bg-emerald-50 px-4 py-3 text-sm font-bold leading-6 text-emerald-800"
           >
-            ویرایش شماره موبایل
-          </button>
-        </form>
-      )}
+            <span aria-hidden="true" className="mt-0.5 font-black">
+              ✓
+            </span>
+            <span>{notice}</span>
+          </p>
+        )}
+
+        {error && (
+          <p
+            role="alert"
+            className="flex items-start gap-2 rounded-lg bg-red-50 px-4 py-3 text-sm font-bold leading-6 text-red-700"
+          >
+            <span aria-hidden="true" className="mt-0.5 font-black">
+              !
+            </span>
+            <span>{error}</span>
+          </p>
+        )}
+
+        {step === 'phone' ? (
+          <form
+            className="space-y-4"
+            onSubmit={(event) => {
+              event.preventDefault();
+              void requestOtp();
+            }}
+          >
+            <Input
+              id="otp-phone"
+              label="شماره موبایل"
+              hint="مثال: ۰۹۱۲۳۴۵۶۷۸۹"
+              type="tel"
+              inputMode="numeric"
+              autoComplete="tel"
+              dir="ltr"
+              placeholder="09123456789"
+              value={phone}
+              onChange={(event) => setPhone(event.target.value)}
+              required
+            />
+
+            <Button type="submit" size="lg" loading={busy} className="w-full">
+              ارسال کد تأیید
+            </Button>
+          </form>
+        ) : (
+          <form
+            className="space-y-4"
+            onSubmit={(event) => {
+              event.preventDefault();
+              void verifyOtp();
+            }}
+          >
+            <Input
+              id="otp-code"
+              label="کد تأیید"
+              hint="کد ۵ رقمی پیامک‌شده را وارد کنید."
+              type="text"
+              inputMode="numeric"
+              autoComplete="one-time-code"
+              dir="ltr"
+              maxLength={5}
+              placeholder="۱۲۳۴۵"
+              value={code}
+              onChange={(event) => setCode(event.target.value)}
+              required
+            />
+
+            <Button type="submit" size="lg" loading={busy} className="w-full">
+              ورود
+            </Button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setStep('phone');
+                setCode('');
+                setError(null);
+                setNotice(null);
+              }}
+              disabled={busy}
+              className="w-full rounded-lg py-2 text-sm font-bold text-ink/70 transition hover:bg-cream-100 hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-500 disabled:opacity-50"
+            >
+              ویرایش شماره موبایل
+            </button>
+          </form>
+        )}
+      </div>
     </Card>
   );
 }

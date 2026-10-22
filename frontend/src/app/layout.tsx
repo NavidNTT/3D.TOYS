@@ -94,6 +94,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           {children}
         </main>
         <Footer />
+        <SearchPalette />
       </body>
     </html>
   );

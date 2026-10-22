@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import Price from '@/src/components/ui/Price';
+import Spinner from '@/src/components/ui/Spinner';
 import { normalizeSearchTerm } from '@/src/lib/persian';
 import { SEARCH_OPEN_EVENT } from '@/src/lib/searchEvents';
 import type { Product } from '@/src/types/product';
@@ -205,7 +206,7 @@ export default function SearchPalette() {
           onChange={(event) => setTerm(event.target.value)}
           onKeyDown={onKeyDown}
           placeholder="جستجوی اسباب‌بازی…"
-          className="w-full border-b border-ink/10 px-5 py-4 text-base text-ink outline-none placeholder:text-ink/40"
+          className="w-full border-b border-ink/10 px-5 py-4 text-base text-ink outline-none placeholder:text-ink/40 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-brand-500"
         />
 
         <div
@@ -215,7 +216,10 @@ export default function SearchPalette() {
           className="max-h-[55vh] overflow-y-auto"
         >
           {searching && results.length === 0 && (
-            <p className="px-5 py-6 text-sm text-ink/50">در حال جستجو…</p>
+            <div className="flex items-center gap-2 px-5 py-6 text-sm text-ink/50">
+              <Spinner className="text-brand-500" />
+              در حال جستجو…
+            </div>
           )}
 
           {!searching && term.trim() !== '' && results.length === 0 && (
